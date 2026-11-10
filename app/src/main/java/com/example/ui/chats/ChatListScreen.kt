@@ -1,0 +1,515 @@
+package com.example.ui.chats
+
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.automirrored.filled.Chat
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.DoneAll
+import androidx.compose.material.icons.filled.GroupAdd
+import androidx.compose.material.icons.filled.PushPin
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.material3.Badge
+import androidx.compose.material3.Divider
+import androidx.compose.material3.FloatingActionButton
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import com.example.R
+import com.example.model.Chat
+import com.example.model.ChatType
+import com.example.model.Story
+import com.example.ui.ConnectViewModel
+import com.example.ui.MainTab
+import com.example.ui.common.ConnectAvatar
+import com.example.ui.common.InsForgeStatusBadge
+import com.example.ui.theme.ConnectBlueLight
+import com.example.ui.theme.ConnectBluePrimary
+import com.example.ui.theme.ConnectCyanAccent
+
+@Composable
+fun ChatListScreen(
+  viewModel: ConnectViewModel,
+  modifier: Modifier = Modifier
+) {
+  val chats by viewModel.filteredChats.collectAsState()
+  val stories by viewModel.stories.collectAsState()
+  val currentUser by viewModel.currentUser.collectAsState()
+  val insForgeConfig by viewModel.insForgeConfig.collectAsState()
+  val searchQuery by viewModel.searchQuery.collectAsState()
+
+  var isSearching by remember { mutableStateOf(false) }
+  var showFabMenu by remember { mutableStateOf(false) }
+
+  Box(modifier = modifier.fillMaxSize()) {
+    Column(modifier = Modifier.fillMaxSize()) {
+      // Header Bar
+      Surface(
+        color = MaterialTheme.colorScheme.surface,
+        shadowElevation = 1.dp,
+        modifier = Modifier.fillMaxWidth()
+      ) {
+        Column(
+          modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 12.dp)
+        ) {
+          Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+          ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+              Box(
+                modifier = Modifier
+                  .size(38.dp)
+                  .clip(RoundedCornerShape(10.dp))
+                  .background(ConnectBluePrimary)
+                  .padding(4.dp),
+                contentAlignment = Alignment.Center
+              ) {
+                Image(
+                  painter = painterResource(id = R.drawable.ic_connect_logo),
+                  contentDescription = "Logo",
+                  modifier = Modifier.size(28.dp)
+                )
+              }
+              Spacer(modifier = Modifier.width(10.dp))
+              Column {
+                Text(
+                  text = "CONNECT",
+                  style = MaterialTheme.typography.titleLarge,
+                  fontWeight = FontWeight.ExtraBold,
+                  color = ConnectBluePrimary
+                )
+                Text(
+                  text = "Connect people, everywhere.",
+                  style = MaterialTheme.typography.labelSmall,
+                  color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+              }
+            }
+
+            Row(verticalAlignment = Alignment.CenterVertically) {
+              IconButton(onClick = {
+                isSearching = !isSearching
+                if (!isSearching) viewModel.setSearchQuery("")
+              }) {
+                Icon(
+                  imageVector = if (isSearching) Icons.Default.Close else Icons.Default.Search,
+                  contentDescription = "Search",
+                  tint = MaterialTheme.colorScheme.onSurface
+                )
+              }
+
+              InsForgeStatusBadge(
+                config = insForgeConfig,
+                onClick = { viewModel.setShowInsForgeDialog(true) }
+              )
+            }
+          }
+
+          // Expandable Search Field
+          AnimatedVisibility(visible = isSearching) {
+            Column(modifier = Modifier.padding(top = 10.dp)) {
+              OutlinedTextField(
+                value = searchQuery,
+                onValueChange = { viewModel.setSearchQuery(it) },
+                placeholder = { Text("Search conversations and messages...") },
+                leadingIcon = { Icon(Icons.Default.Search, contentDescription = null, tint = ConnectBluePrimary) },
+                singleLine = true,
+                modifier = Modifier
+                  .fillMaxWidth()
+                  .testTag("chat_search_input"),
+                shape = RoundedCornerShape(24.dp),
+                colors = OutlinedTextFieldDefaults.colors(
+                  unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                  focusedContainerColor = MaterialTheme.colorScheme.surface
+                )
+              )
+            }
+          }
+        }
+      }
+
+      // Stories & Online Friends Reel
+      StoriesReel(
+        stories = stories,
+        onAddStory = { viewModel.setShowCreateStoryDialog(true) },
+        onOpenStory = { viewModel.openStory(it) }
+      )
+
+      HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f))
+
+      // Conversation List
+      if (chats.isEmpty()) {
+        Box(
+          modifier = Modifier
+            .fillMaxSize()
+            .padding(32.dp),
+          contentAlignment = Alignment.Center
+        ) {
+          Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Icon(
+              imageVector = Icons.AutoMirrored.Filled.Chat,
+              contentDescription = null,
+              tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f),
+              modifier = Modifier.size(64.dp)
+            )
+            Spacer(modifier = Modifier.height(12.dp))
+            Text(
+              text = if (searchQuery.isNotBlank()) "No conversations match \"$searchQuery\"" else "No conversations yet",
+              style = MaterialTheme.typography.titleMedium,
+              color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Text(
+              text = "Tap + to start chatting with friends",
+              style = MaterialTheme.typography.bodySmall,
+              color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+            )
+          }
+        }
+      } else {
+        LazyColumn(
+          modifier = Modifier.fillMaxSize(),
+          contentPadding = PaddingValues(bottom = 88.dp)
+        ) {
+          items(chats, key = { it.id }) { chat ->
+            ChatItem(
+              chat = chat,
+              onClick = { viewModel.openChat(chat.id) }
+            )
+            HorizontalDivider(
+              modifier = Modifier.padding(start = 76.dp),
+              color = MaterialTheme.colorScheme.outline.copy(alpha = 0.15f)
+            )
+          }
+        }
+      }
+    }
+
+    // Floating Action Button for New Chat / Group
+    Column(
+      modifier = Modifier
+        .align(Alignment.BottomEnd)
+        .padding(bottom = 80.dp, end = 20.dp),
+      horizontalAlignment = Alignment.End
+    ) {
+      AnimatedVisibility(visible = showFabMenu) {
+        Column(
+          horizontalAlignment = Alignment.End,
+          modifier = Modifier.padding(bottom = 12.dp)
+        ) {
+          Surface(
+            shape = RoundedCornerShape(12.dp),
+            color = MaterialTheme.colorScheme.surface,
+            shadowElevation = 4.dp,
+            modifier = Modifier
+              .clickable {
+                showFabMenu = false
+                viewModel.setShowCreateGroupDialog(true)
+              }
+              .testTag("create_group_option")
+          ) {
+            Row(
+              verticalAlignment = Alignment.CenterVertically,
+              modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp)
+            ) {
+              Text("New Group", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
+              Spacer(modifier = Modifier.width(8.dp))
+              Icon(Icons.Default.GroupAdd, contentDescription = null, tint = ConnectBluePrimary)
+            }
+          }
+
+          Spacer(modifier = Modifier.height(10.dp))
+
+          Surface(
+            shape = RoundedCornerShape(12.dp),
+            color = MaterialTheme.colorScheme.surface,
+            shadowElevation = 4.dp,
+            modifier = Modifier
+              .clickable {
+                showFabMenu = false
+                viewModel.setTab(MainTab.CONTACTS)
+              }
+              .testTag("new_chat_option")
+          ) {
+            Row(
+              verticalAlignment = Alignment.CenterVertically,
+              modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp)
+            ) {
+              Text("New Chat", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
+              Spacer(modifier = Modifier.width(8.dp))
+              Icon(Icons.AutoMirrored.Filled.Chat, contentDescription = null, tint = ConnectBluePrimary)
+            }
+          }
+        }
+      }
+
+      FloatingActionButton(
+        onClick = { showFabMenu = !showFabMenu },
+        containerColor = ConnectBluePrimary,
+        contentColor = Color.White,
+        shape = CircleShape,
+        modifier = Modifier.testTag("new_chat_fab")
+      ) {
+        Icon(
+          imageVector = if (showFabMenu) Icons.Default.Close else Icons.Default.Add,
+          contentDescription = "New Conversation"
+        )
+      }
+    }
+  }
+}
+
+@Composable
+fun StoriesReel(
+  stories: List<Story>,
+  onAddStory: () -> Unit,
+  onOpenStory: (Story) -> Unit
+) {
+  LazyRow(
+    modifier = Modifier
+      .fillMaxWidth()
+      .padding(vertical = 12.dp),
+    contentPadding = PaddingValues(horizontal = 16.dp),
+    horizontalArrangement = Arrangement.spacedBy(14.dp),
+    verticalAlignment = Alignment.CenterVertically
+  ) {
+    // My Story Add Item
+    item {
+      Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        modifier = Modifier
+          .clickable { onAddStory() }
+          .testTag("add_story_reel_item")
+      ) {
+        Box(
+          modifier = Modifier.size(56.dp),
+          contentAlignment = Alignment.Center
+        ) {
+          Box(
+            modifier = Modifier
+              .size(56.dp)
+              .clip(CircleShape)
+              .background(ConnectBlueLight),
+            contentAlignment = Alignment.Center
+          ) {
+            Text("Me", color = ConnectBluePrimary, fontWeight = FontWeight.Bold)
+          }
+          Box(
+            modifier = Modifier
+              .size(20.dp)
+              .align(Alignment.BottomEnd)
+              .clip(CircleShape)
+              .background(ConnectBluePrimary)
+              .border(2.dp, MaterialTheme.colorScheme.surface, CircleShape),
+            contentAlignment = Alignment.Center
+          ) {
+            Icon(Icons.Default.Add, contentDescription = "Add Story", tint = Color.White, modifier = Modifier.size(14.dp))
+          }
+        }
+        Spacer(modifier = Modifier.height(4.dp))
+        Text(
+          text = "My Status",
+          style = MaterialTheme.typography.labelSmall,
+          fontWeight = FontWeight.Medium,
+          color = MaterialTheme.colorScheme.onSurface
+        )
+      }
+    }
+
+    // Friends' Stories
+    items(stories, key = { it.id }) { story ->
+      Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        modifier = Modifier
+          .clickable { onOpenStory(story) }
+          .testTag("story_reel_item_${story.id}")
+      ) {
+        Box(
+          modifier = Modifier
+            .size(58.dp)
+            .border(
+              width = 2.5.dp,
+              brush = if (story.isViewed) Brush.linearGradient(listOf(Color.Gray, Color.LightGray))
+              else Brush.linearGradient(listOf(ConnectBluePrimary, ConnectCyanAccent)),
+              shape = CircleShape
+            )
+            .padding(3.dp),
+          contentAlignment = Alignment.Center
+        ) {
+          ConnectAvatar(
+            avatarUrl = story.userAvatar,
+            name = story.userName,
+            size = 48.dp
+          )
+        }
+        Spacer(modifier = Modifier.height(4.dp))
+        Text(
+          text = story.userName.split(" ").firstOrNull() ?: story.userName,
+          style = MaterialTheme.typography.labelSmall,
+          fontWeight = FontWeight.Medium,
+          color = MaterialTheme.colorScheme.onSurface,
+          maxLines = 1,
+          overflow = TextOverflow.Ellipsis
+        )
+      }
+    }
+  }
+}
+
+@Composable
+fun ChatItem(
+  chat: Chat,
+  onClick: () -> Unit
+) {
+  val isOnline = chat.participants.any { it.isOnline }
+
+  Row(
+    modifier = Modifier
+      .fillMaxWidth()
+      .clickable { onClick() }
+      .padding(horizontal = 16.dp, vertical = 12.dp)
+      .testTag("chat_item_${chat.id}"),
+    verticalAlignment = Alignment.CenterVertically
+  ) {
+    ConnectAvatar(
+      avatarUrl = chat.avatarUrl,
+      name = chat.name,
+      size = 52.dp,
+      isOnline = isOnline,
+      showOnlineBadge = chat.type == ChatType.DIRECT
+    )
+
+    Spacer(modifier = Modifier.width(14.dp))
+
+    Column(modifier = Modifier.weight(1f)) {
+      Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+      ) {
+        Text(
+          text = chat.name,
+          style = MaterialTheme.typography.titleMedium,
+          fontWeight = FontWeight.Bold,
+          color = MaterialTheme.colorScheme.onSurface,
+          maxLines = 1,
+          overflow = TextOverflow.Ellipsis,
+          modifier = Modifier.weight(1f, fill = false)
+        )
+
+        Text(
+          text = chat.lastMessageTime,
+          style = MaterialTheme.typography.labelSmall,
+          color = if (chat.unreadCount > 0) ConnectBluePrimary else MaterialTheme.colorScheme.onSurfaceVariant
+        )
+      }
+
+      Spacer(modifier = Modifier.height(4.dp))
+
+      Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+      ) {
+        Row(
+          modifier = Modifier.weight(1f),
+          verticalAlignment = Alignment.CenterVertically
+        ) {
+          if (chat.unreadCount == 0 && chat.type == ChatType.DIRECT) {
+            Icon(
+              imageVector = Icons.Default.DoneAll,
+              contentDescription = "Read",
+              tint = ConnectBluePrimary,
+              modifier = Modifier.size(15.dp)
+            )
+            Spacer(modifier = Modifier.width(4.dp))
+          }
+
+          Text(
+            text = chat.lastMessage,
+            style = MaterialTheme.typography.bodyMedium,
+            color = if (chat.unreadCount > 0) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant,
+            fontWeight = if (chat.unreadCount > 0) FontWeight.SemiBold else FontWeight.Normal,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+          )
+        }
+
+        Row(verticalAlignment = Alignment.CenterVertically) {
+          if (chat.isPinned) {
+            Icon(
+              imageVector = Icons.Default.PushPin,
+              contentDescription = "Pinned",
+              tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+              modifier = Modifier.size(14.dp)
+            )
+            Spacer(modifier = Modifier.width(6.dp))
+          }
+
+          if (chat.unreadCount > 0) {
+            Box(
+              modifier = Modifier
+                .clip(CircleShape)
+                .background(ConnectBluePrimary)
+                .padding(horizontal = 6.dp, vertical = 2.dp),
+              contentAlignment = Alignment.Center
+            ) {
+              Text(
+                text = chat.unreadCount.toString(),
+                color = Color.White,
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Bold
+              )
+            }
+          }
+        }
+      }
+    }
+  }
+}

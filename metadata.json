@@ -1,0 +1,6 @@
+{
+  "name": "CONNECT",
+  "description": "Connect people, everywhere. Real-time social messaging platform with one-on-one and group chat, stories, calls, contacts discovery, and InsForge backend integration.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
