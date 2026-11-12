@@ -540,6 +540,63 @@ class ConnectRepository(context: Context) {
     return groupId
   }
 
+  fun deleteChat(chatId: String) {
+    _chats.value = _chats.value.filter { it.id != chatId }
+    _messages.value = _messages.value.toMutableMap().apply {
+      remove(chatId)
+    }
+  }
+
+  fun clearChatHistory(chatId: String) {
+    _messages.value = _messages.value.toMutableMap().apply {
+      put(chatId, emptyList())
+    }
+    _chats.value = _chats.value.map {
+      if (it.id == chatId) it.copy(lastMessage = "No messages", lastMessageTime = "Just now", unreadCount = 0)
+      else it
+    }
+  }
+
+  fun startDirectChat(userId: String): String {
+    val existing = _chats.value.find { c -> c.type == ChatType.DIRECT && c.participants.any { it.id == userId } }
+    if (existing != null) {
+      return existing.id
+    }
+    val targetUser = _allUsers.value.find { it.id == userId } ?: return ""
+    val currentUser = _currentUser.value ?: return ""
+    val chatId = "chat_" + UUID.randomUUID().toString()
+    val timeStr = SimpleDateFormat("h:mm a", Locale.getDefault()).format(Date())
+    val newChat = Chat(
+      id = chatId,
+      type = ChatType.DIRECT,
+      name = targetUser.name,
+      avatarUrl = targetUser.avatarUrl,
+      lastMessage = "Say hello to ${targetUser.name} 👋",
+      lastMessageTime = timeStr,
+      participants = listOf(targetUser, currentUser)
+    )
+    _chats.value = listOf(newChat) + _chats.value
+    _messages.value = _messages.value.toMutableMap().apply {
+      put(
+        chatId,
+        listOf(
+          Message(
+            id = UUID.randomUUID().toString(),
+            chatId = chatId,
+            senderId = targetUser.id,
+            senderName = targetUser.name,
+            senderAvatar = targetUser.avatarUrl,
+            content = "Hey! Let's connect on CONNECT 👋",
+            timestamp = System.currentTimeMillis(),
+            timeString = timeStr,
+            status = MessageStatus.READ
+          )
+        )
+      )
+    }
+    return chatId
+  }
+
   fun markChatAsRead(chatId: String) {
     _chats.value = _chats.value.map { chat ->
       if (chat.id == chatId) chat.copy(unreadCount = 0) else chat
@@ -669,6 +726,10 @@ class ConnectRepository(context: Context) {
 
   fun blockUser(userId: String) {
     _allUsers.value = _allUsers.value.map { if (it.id == userId) it.copy(isBlocked = true) else it }
+    val directChat = _chats.value.find { it.type == ChatType.DIRECT && it.participants.any { p -> p.id == userId } }
+    if (directChat != null) {
+      deleteChat(directChat.id)
+    }
   }
 
   fun unblockUser(userId: String) {

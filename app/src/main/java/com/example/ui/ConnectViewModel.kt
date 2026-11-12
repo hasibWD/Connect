@@ -67,6 +67,9 @@ class ConnectViewModel(application: Application) : AndroidViewModel(application)
   private val _showCreateStoryDialog = MutableStateFlow(false)
   val showCreateStoryDialog: StateFlow<Boolean> = _showCreateStoryDialog.asStateFlow()
 
+  private val _showNewChatDialog = MutableStateFlow(false)
+  val showNewChatDialog: StateFlow<Boolean> = _showNewChatDialog.asStateFlow()
+
   private val _showAdminPanel = MutableStateFlow(false)
   val showAdminPanel: StateFlow<Boolean> = _showAdminPanel.asStateFlow()
 
@@ -330,6 +333,29 @@ class ConnectViewModel(application: Application) : AndroidViewModel(application)
 
   fun resolveReport(reportId: String, action: String) {
     repository.resolveReport(reportId, action)
+  }
+
+  fun setShowNewChatDialog(show: Boolean) {
+    _showNewChatDialog.value = show
+  }
+
+  fun deleteChat(chatId: String) {
+    if (_activeChatId.value == chatId) {
+      closeChat()
+    }
+    repository.deleteChat(chatId)
+  }
+
+  fun clearChatHistory(chatId: String) {
+    repository.clearChatHistory(chatId)
+  }
+
+  fun startDirectChat(userId: String) {
+    val chatId = repository.startDirectChat(userId)
+    if (chatId.isNotBlank()) {
+      _showNewChatDialog.value = false
+      openChat(chatId)
+    }
   }
 
   // InsForge Config

@@ -30,17 +30,31 @@ import androidx.compose.material.icons.filled.DoneAll
 import androidx.compose.material.icons.filled.GroupAdd
 import androidx.compose.material.icons.filled.PushPin
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.material.icons.filled.Block
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.Person
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Badge
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Divider
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -62,6 +76,7 @@ import com.example.R
 import com.example.model.Chat
 import com.example.model.ChatType
 import com.example.model.Story
+import com.example.model.User
 import com.example.ui.ConnectViewModel
 import com.example.ui.MainTab
 import com.example.ui.common.ConnectAvatar
@@ -69,6 +84,7 @@ import com.example.ui.common.InsForgeStatusBadge
 import com.example.ui.theme.ConnectBlueLight
 import com.example.ui.theme.ConnectBluePrimary
 import com.example.ui.theme.ConnectCyanAccent
+import com.example.ui.theme.ConnectRedError
 
 @Composable
 fun ChatListScreen(
@@ -83,6 +99,10 @@ fun ChatListScreen(
 
   var isSearching by remember { mutableStateOf(false) }
   var showFabMenu by remember { mutableStateOf(false) }
+  var selectedChatForProfile by remember { mutableStateOf<Chat?>(null) }
+  var selectedChatForActions by remember { mutableStateOf<Chat?>(null) }
+  var chatToDelete by remember { mutableStateOf<Chat?>(null) }
+  var userToBlock by remember { mutableStateOf<User?>(null) }
 
   Box(modifier = modifier.fillMaxSize()) {
     Column(modifier = Modifier.fillMaxSize()) {
@@ -134,6 +154,17 @@ fun ChatListScreen(
             }
 
             Row(verticalAlignment = Alignment.CenterVertically) {
+              IconButton(
+                onClick = { viewModel.setShowNewChatDialog(true) },
+                modifier = Modifier.testTag("top_bar_new_chat_button")
+              ) {
+                Icon(
+                  imageVector = Icons.Default.Edit,
+                  contentDescription = "New Conversation",
+                  tint = ConnectBluePrimary
+                )
+              }
+
               IconButton(onClick = {
                 isSearching = !isSearching
                 if (!isSearching) viewModel.setSearchQuery("")

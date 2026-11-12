@@ -139,10 +139,13 @@ fun ConversationScreen(
   var inputText by remember { mutableStateOf("") }
   var showEmojiDrawer by remember { mutableStateOf(false) }
   var showAttachmentSheet by remember { mutableStateOf(false) }
+  var showChatProfileSheet by remember { mutableStateOf(false) }
   var selectedMessageForAction by remember { mutableStateOf<Message?>(null) }
   var messageToEdit by remember { mutableStateOf<Message?>(null) }
   var showMoreMenu by remember { mutableStateOf(false) }
   var showReportDialog by remember { mutableStateOf(false) }
+  var showDeleteChatDialog by remember { mutableStateOf(false) }
+  var showBlockUserDialog by remember { mutableStateOf(false) }
 
   // Auto scroll to bottom on new message
   LaunchedEffect(messages.size) {
@@ -175,35 +178,46 @@ fun ConversationScreen(
           Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
         }
 
-        ConnectAvatar(
-          avatarUrl = chat.avatarUrl,
-          name = chat.name,
-          size = 40.dp,
-          isOnline = chat.participants.any { it.isOnline },
-          showOnlineBadge = chat.type == ChatType.DIRECT
-        )
-
-        Spacer(modifier = Modifier.width(10.dp))
-
-        Column(modifier = Modifier.weight(1f)) {
-          Text(
-            text = chat.name,
-            style = MaterialTheme.typography.titleMedium,
-            fontWeight = FontWeight.Bold,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis
+        // Messenger Clickable Contact Profile Header
+        Row(
+          modifier = Modifier
+            .weight(1f)
+            .clip(RoundedCornerShape(12.dp))
+            .clickable { showChatProfileSheet = true }
+            .padding(horizontal = 4.dp, vertical = 2.dp)
+            .testTag("conversation_header_profile_click"),
+          verticalAlignment = Alignment.CenterVertically
+        ) {
+          ConnectAvatar(
+            avatarUrl = chat.avatarUrl,
+            name = chat.name,
+            size = 40.dp,
+            isOnline = chat.participants.any { it.isOnline },
+            showOnlineBadge = chat.type == ChatType.DIRECT
           )
-          val subtitle = if (chat.type == ChatType.GROUP) {
-            "${chat.participants.size} members"
-          } else {
-            val contact = chat.participants.firstOrNull { it.id != currentUser?.id }
-            if (contact?.isOnline == true) "Online" else contact?.lastSeenText ?: "Offline"
+
+          Spacer(modifier = Modifier.width(10.dp))
+
+          Column(modifier = Modifier.weight(1f)) {
+            Text(
+              text = chat.name,
+              style = MaterialTheme.typography.titleMedium,
+              fontWeight = FontWeight.Bold,
+              maxLines = 1,
+              overflow = TextOverflow.Ellipsis
+            )
+            val subtitle = if (chat.type == ChatType.GROUP) {
+              "${chat.participants.size} members"
+            } else {
+              val contact = chat.participants.firstOrNull { it.id != currentUser?.id }
+              if (contact?.isOnline == true) "Online" else contact?.lastSeenText ?: "Offline"
+            }
+            Text(
+              text = subtitle,
+              style = MaterialTheme.typography.labelSmall,
+              color = if (subtitle == "Online") ConnectGreenOnline else MaterialTheme.colorScheme.onSurfaceVariant
+            )
           }
-          Text(
-            text = subtitle,
-            style = MaterialTheme.typography.labelSmall,
-            color = if (subtitle == "Online") ConnectGreenOnline else MaterialTheme.colorScheme.onSurfaceVariant
-          )
         }
 
         // Voice Call Button
@@ -248,17 +262,42 @@ fun ConversationScreen(
             onDismissRequest = { showMoreMenu = false }
           ) {
             DropdownMenuItem(
-              text = { Text("Report User / Chat") },
+              text = { Text("Chat Profile & Info") },
               onClick = {
                 showMoreMenu = false
-                showReportDialog = true
+                showChatProfileSheet = true
               }
             )
             DropdownMenuItem(
-              text = { Text("Clear Messages") },
+              text = { Text("Clear Chat History") },
               onClick = {
                 showMoreMenu = false
-                Toast.makeText(context, "Chat cleared", Toast.LENGTH_SHORT).show()
+                viewModel.clearChatHistory(chat.id)
+                Toast.makeText(context, "Chat history cleared", Toast.LENGTH_SHORT).show()
+              }
+            )
+            val otherParticipant = chat.participants.firstOrNull { it.id != currentUser?.id }
+            if (chat.type == ChatType.DIRECT && otherParticipant != null) {
+              DropdownMenuItem(
+                text = { Text("Block ${otherParticipant.name}", color = ConnectRedError) },
+                onClick = {
+                  showMoreMenu = false
+                  showBlockUserDialog = true
+                }
+              )
+            }
+            DropdownMenuItem(
+              text = { Text("Delete Chat", color = ConnectRedError) },
+              onClick = {
+                showMoreMenu = false
+                showDeleteChatDialog = true
+              }
+            )
+            DropdownMenuItem(
+              text = { Text("Report Chat") },
+              onClick = {
+                showMoreMenu = false
+                showReportDialog = true
               }
             )
           }
@@ -700,6 +739,75 @@ fun ConversationScreen(
       },
       dismissButton = {
         TextButton(onClick = { showReportDialog = false }) {
+          Text("Cancel")
+        }
+      }
+    )
+  }
+
+  // Messenger Chat Profile Bottom Sheet
+  if (showChatProfileSheet) {
+    ChatProfileSheet(
+      chat = chat,
+      viewModel = viewModel,
+      onDismiss = { showChatProfileSheet = false }
+    )
+  }
+
+  // Delete Chat Confirmation Dialog
+  if (showDeleteChatDialog) {
+    AlertDialog(
+      onDismissRequest = { showDeleteChatDialog = false },
+      title = { Text("Delete Entire Chat?", fontWeight = FontWeight.Bold) },
+      text = {
+        Text("Once you delete your copy of this conversation, it cannot be undone. All messages and shared media in this chat will be removed.")
+      },
+      confirmButton = {
+        Button(
+          onClick = {
+            showDeleteChatDialog = false
+            viewModel.deleteChat(chat.id)
+            Toast.makeText(context, "Chat deleted", Toast.LENGTH_SHORT).show()
+          },
+          colors = ButtonDefaults.buttonColors(containerColor = ConnectRedError)
+        ) {
+          Text("Delete Chat")
+        }
+      },
+      dismissButton = {
+        TextButton(onClick = { showDeleteChatDialog = false }) {
+          Text("Cancel")
+        }
+      }
+    )
+  }
+
+  // Block User Confirmation Dialog
+  if (showBlockUserDialog) {
+    val targetUser = chat.participants.firstOrNull { it.id != currentUser?.id }
+    AlertDialog(
+      onDismissRequest = { showBlockUserDialog = false },
+      title = { Text("Block ${targetUser?.name ?: "User"}?", fontWeight = FontWeight.Bold) },
+      text = {
+        Text("${targetUser?.name ?: "They"} won't be able to send you messages or view your stories and online status on CONNECT. The conversation will be removed from your chat list.")
+      },
+      confirmButton = {
+        Button(
+          onClick = {
+            showBlockUserDialog = false
+            if (targetUser != null) {
+              viewModel.blockUser(targetUser.id)
+            }
+            viewModel.deleteChat(chat.id)
+            Toast.makeText(context, "${targetUser?.name ?: "User"} blocked", Toast.LENGTH_SHORT).show()
+          },
+          colors = ButtonDefaults.buttonColors(containerColor = ConnectRedError)
+        ) {
+          Text("Block")
+        }
+      },
+      dismissButton = {
+        TextButton(onClick = { showBlockUserDialog = false }) {
           Text("Cancel")
         }
       }

@@ -37,6 +37,7 @@ import androidx.compose.ui.unit.sp
 import com.example.ui.calls.CallsScreen
 import com.example.ui.chats.ChatListScreen
 import com.example.ui.chats.GroupCreateDialog
+import com.example.ui.chats.NewChatDialog
 import com.example.ui.contacts.ContactsScreen
 import com.example.ui.profile.ProfileScreen
 import com.example.ui.settings.InsForgeSetupDialog
@@ -59,6 +60,7 @@ fun MainScreen(
   val chats by viewModel.rawChats.collectAsState()
   val showInsForgeDialog by viewModel.showInsForgeDialog.collectAsState()
   val showCreateGroupDialog by viewModel.showCreateGroupDialog.collectAsState()
+  val showNewChatDialog by viewModel.showNewChatDialog.collectAsState()
 
   val totalUnread = chats.sumOf { it.unreadCount }
 
@@ -157,6 +159,14 @@ fun MainScreen(
     GroupCreateDialog(
       viewModel = viewModel,
       onDismiss = { viewModel.setShowCreateGroupDialog(false) }
+    )
+  }
+
+  // Messenger New Chat Dialog
+  if (showNewChatDialog) {
+    NewChatDialog(
+      viewModel = viewModel,
+      onDismiss = { viewModel.setShowNewChatDialog(false) }
     )
   }
 }
