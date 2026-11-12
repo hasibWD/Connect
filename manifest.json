@@ -1,0 +1,22 @@
+{
+  "short_name": "CONNECT",
+  "name": "CONNECT – Social Messaging Platform",
+  "description": "Connect people, everywhere. Real-time social messaging with InsForge backend.",
+  "icons": [
+    {
+      "src": "/icon-192.png",
+      "type": "image/png",
+      "sizes": "192x192"
+    },
+    {
+      "src": "/icon-512.png",
+      "type": "image/png",
+      "sizes": "512x512"
+    }
+  ],
+  "start_url": "/",
+  "background_color": "#0052CC",
+  "theme_color": "#0066FF",
+  "display": "standalone",
+  "orientation": "portrait"
+}

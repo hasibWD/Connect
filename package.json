@@ -1,0 +1,21 @@
+{
+  "name": "connect-messaging-platform",
+  "version": "1.0.0",
+  "private": true,
+  "description": "CONNECT – Complete Social Messaging Platform with InsForge Backend",
+  "scripts": {
+    "dev": "npx serve -p 3000 .",
+    "build": "echo 'CONNECT Web & PWA ready for Vercel deployment.'",
+    "start": "npx serve -p 3000 ."
+  },
+  "keywords": [
+    "connect",
+    "messaging",
+    "chat",
+    "insforge",
+    "realtime",
+    "pwa"
+  ],
+  "author": "CONNECT Team",
+  "license": "MIT"
+}
