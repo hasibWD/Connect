@@ -20,6 +20,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ExitToApp
 import androidx.compose.material.icons.filled.AdminPanelSettings
+import androidx.compose.material.icons.filled.Block
 import androidx.compose.material.icons.filled.Cloud
 import androidx.compose.material.icons.filled.DarkMode
 import androidx.compose.material.icons.filled.Edit
@@ -75,6 +76,7 @@ fun ProfileScreen(
   val users by viewModel.allUsers.collectAsState()
 
   var showEditProfileDialog by remember { mutableStateOf(false) }
+  var showBlockedUsersDialog by remember { mutableStateOf(false) }
 
   val user = currentUser ?: User(
     id = "me",
@@ -272,6 +274,17 @@ fun ProfileScreen(
 
           HorizontalDivider(modifier = Modifier.padding(start = 56.dp), color = MaterialTheme.colorScheme.outline.copy(alpha = 0.15f))
 
+          // Blocked Accounts
+          val blockedCount = users.count { it.isBlocked }
+          SettingsRowItem(
+            icon = Icons.Default.Block,
+            title = "Blocked Accounts",
+            subtitle = if (blockedCount == 0) "No blocked users" else "$blockedCount blocked user(s) — tap to manage",
+            onClick = { showBlockedUsersDialog = true }
+          )
+
+          HorizontalDivider(modifier = Modifier.padding(start = 56.dp), color = MaterialTheme.colorScheme.outline.copy(alpha = 0.15f))
+
           // Admin Panel (Inspect / Moderation)
           SettingsRowItem(
             icon = Icons.Default.AdminPanelSettings,
@@ -336,6 +349,55 @@ fun ProfileScreen(
       dismissButton = {
         TextButton(onClick = { showEditProfileDialog = false }) {
           Text("Cancel")
+        }
+      }
+    )
+  }
+
+  // Blocked Accounts Dialog
+  if (showBlockedUsersDialog) {
+    val blockedUsers = users.filter { it.isBlocked }
+    AlertDialog(
+      onDismissRequest = { showBlockedUsersDialog = false },
+      title = { Text("Blocked Accounts", fontWeight = FontWeight.Bold) },
+      text = {
+        if (blockedUsers.isEmpty()) {
+          Text(
+            text = "You haven't blocked anyone yet. When you block someone from a chat profile, they will appear here.",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+          )
+        } else {
+          Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            blockedUsers.forEach { blocked ->
+              Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+              ) {
+                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
+                  ConnectAvatar(
+                    avatarUrl = blocked.avatarUrl,
+                    name = blocked.name,
+                    size = 40.dp
+                  )
+                  Spacer(modifier = Modifier.width(10.dp))
+                  Column {
+                    Text(blocked.name, fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.bodyMedium)
+                    Text("@${blocked.username}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                  }
+                }
+                TextButton(onClick = { viewModel.unblockUser(blocked.id) }) {
+                  Text("Unblock", color = ConnectBluePrimary, fontWeight = FontWeight.Bold)
+                }
+              }
+            }
+          }
+        }
+      },
+      confirmButton = {
+        TextButton(onClick = { showBlockedUsersDialog = false }) {
+          Text("Close")
         }
       }
     )

@@ -191,8 +191,8 @@
                 <i data-lucide="users" class="w-3.5 h-3.5"></i>
                 <span>Group</span>
               </button>
-              <button onclick="switchTab('contacts')" class="px-3 py-1.5 bg-connect-blue hover:bg-connect-dark text-white text-xs font-semibold rounded-lg flex items-center space-x-1 shadow-sm transition">
-                <i data-lucide="message-square-plus" class="w-3.5 h-3.5"></i>
+              <button onclick="openNewChatModal()" class="px-3 py-1.5 bg-connect-blue hover:bg-connect-dark text-white text-xs font-semibold rounded-lg flex items-center space-x-1 shadow-sm transition">
+                <i data-lucide="edit-3" class="w-3.5 h-3.5"></i>
                 <span>New Chat</span>
               </button>
             </div>
@@ -200,7 +200,7 @@
         </div>
 
         <!-- Active Chat Message Pane -->
-        <div id="chat-conversation-pane" class="hidden md:flex flex-1 flex-col bg-slate-50/50 dark:bg-slate-950/50 overflow-hidden">
+        <div id="chat-conversation-pane" class="hidden md:flex flex-1 flex-col bg-slate-50/50 dark:bg-slate-950/50 overflow-hidden relative">
           <!-- Active Conversation Header -->
           <div id="active-chat-header" class="h-16 px-4 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between bg-white dark:bg-slate-900">
             <!-- Rendered by JS -->
@@ -242,6 +242,11 @@
             <!-- Rendered by JS -->
           </div>
         </div>
+
+        <!-- MESSENGER CHAT PROFILE / DETAILS DRAWER -->
+        <aside id="chat-profile-drawer" class="hidden w-full md:w-80 lg:w-84 bg-white dark:bg-slate-900 border-l border-slate-200 dark:border-slate-800 flex-col overflow-y-auto custom-scrollbar z-20 fixed md:static inset-0 md:inset-auto">
+          <!-- Rendered by JS -->
+        </aside>
       </section>
 
       <!-- TAB 2: CONTACTS -->
@@ -378,6 +383,17 @@
                 </div>
               </div>
               <input type="checkbox" checked class="w-4 h-4 accent-connect-blue rounded cursor-pointer">
+            </div>
+
+            <div onclick="openBlockedUsersModal()" class="p-4 flex items-center justify-between cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800/40 transition">
+              <div class="flex items-center space-x-3">
+                <i data-lucide="shield-ban" class="w-5 h-5 text-red-500"></i>
+                <div>
+                  <span class="text-sm font-bold block">Blocked Accounts</span>
+                  <span id="profile-blocked-subtitle" class="text-xs text-slate-400">Manage blocked people</span>
+                </div>
+              </div>
+              <i data-lucide="chevron-right" class="w-4 h-4 text-slate-400"></i>
             </div>
 
             <div onclick="openAdminModal()" class="p-4 flex items-center justify-between cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800/40 transition">
@@ -678,6 +694,69 @@ CREATE POLICY "Public profiles viewable" ON public.profiles FOR SELECT USING (tr
     </div>
   </div>
 
+  <!-- MODAL: MESSENGER NEW CHAT -->
+  <div id="new-chat-modal" class="hidden fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+    <div class="bg-white dark:bg-slate-900 rounded-3xl max-w-md w-full max-h-[82vh] flex flex-col shadow-2xl border border-slate-200 dark:border-slate-800 overflow-hidden">
+      <div class="p-4 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
+        <h3 class="font-bold text-base">New Message</h3>
+        <button onclick="closeNewChatModal()" class="p-1 text-slate-400 hover:text-slate-600"><i data-lucide="x" class="w-5 h-5"></i></button>
+      </div>
+      <div class="p-3 border-b border-slate-100 dark:border-slate-800 space-y-2.5">
+        <div class="flex items-center space-x-2 bg-slate-100 dark:bg-slate-800 rounded-full px-3.5 py-2">
+          <span class="text-xs font-bold text-slate-400">To:</span>
+          <input type="text" id="new-chat-search" oninput="renderNewChatUsers()" placeholder="Type a name or @username..." class="flex-1 bg-transparent text-sm focus:outline-none">
+        </div>
+        <button onclick="closeNewChatModal(); openNewGroupModal();" class="w-full flex items-center space-x-3 p-2.5 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800/70 transition text-left">
+          <div class="w-9 h-9 rounded-full bg-connect-light dark:bg-blue-950 text-connect-blue flex items-center justify-center">
+            <i data-lucide="users" class="w-4 h-4"></i>
+          </div>
+          <span class="text-sm font-bold text-connect-blue">Create a new group</span>
+        </button>
+      </div>
+      <div id="new-chat-users-list" class="flex-1 overflow-y-auto p-2 space-y-1 custom-scrollbar">
+        <!-- Rendered by JS -->
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: CREATE GROUP -->
+  <div id="new-group-modal" class="hidden fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+    <div class="bg-white dark:bg-slate-900 rounded-3xl max-w-md w-full p-6 shadow-2xl border border-slate-200 dark:border-slate-800 space-y-4">
+      <div class="flex items-center justify-between">
+        <h3 class="font-bold text-lg">Create Group Chat</h3>
+        <button onclick="closeNewGroupModal()" class="text-slate-400 hover:text-slate-600"><i data-lucide="x" class="w-5 h-5"></i></button>
+      </div>
+      <input type="text" id="new-group-name" placeholder="Group name (e.g. Weekend Squad)" class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-connect-blue">
+      <div class="space-y-1.5 max-h-44 overflow-y-auto custom-scrollbar" id="new-group-members-list">
+        <!-- Rendered by JS -->
+      </div>
+      <div class="flex justify-end space-x-2 pt-2">
+        <button onclick="closeNewGroupModal()" class="px-4 py-2 text-xs font-semibold rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800">Cancel</button>
+        <button onclick="createGroupChat()" class="px-4 py-2 bg-connect-blue text-white text-xs font-semibold rounded-lg hover:bg-connect-dark">Create Group</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: CHAT ACTION MENU (Messenger Quick Actions) -->
+  <div id="chat-action-modal" class="hidden fixed inset-0 bg-black/50 backdrop-blur-xs z-50 flex items-end md:items-center justify-center p-4" onclick="if(event.target===this) closeChatActionModal()">
+    <div id="chat-action-modal-content" class="bg-white dark:bg-slate-900 rounded-3xl max-w-sm w-full p-5 shadow-2xl border border-slate-200 dark:border-slate-800 space-y-2">
+      <!-- Rendered by JS -->
+    </div>
+  </div>
+
+  <!-- MODAL: BLOCKED ACCOUNTS -->
+  <div id="blocked-users-modal" class="hidden fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+    <div class="bg-white dark:bg-slate-900 rounded-3xl max-w-md w-full max-h-[80vh] flex flex-col shadow-2xl border border-slate-200 dark:border-slate-800 overflow-hidden">
+      <div class="p-4 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
+        <h3 class="font-bold text-base">Blocked Accounts</h3>
+        <button onclick="closeBlockedUsersModal()" class="text-slate-400 hover:text-slate-600"><i data-lucide="x" class="w-5 h-5"></i></button>
+      </div>
+      <div id="blocked-users-list" class="p-4 flex-1 overflow-y-auto space-y-3 custom-scrollbar">
+        <!-- Rendered by JS -->
+      </div>
+    </div>
+  </div>
+
   <!-- JAVASCRIPT APPLICATION LOGIC -->
   <script>
     // State
@@ -693,6 +772,7 @@ CREATE POLICY "Public profiles viewable" ON public.profiles FOR SELECT USING (tr
       },
       currentTab: 'chats',
       activeChatId: 'c1',
+      showChatProfile: false,
       replyingTo: null,
       callTimer: null,
       callSeconds: 0,
@@ -701,6 +781,12 @@ CREATE POLICY "Public profiles viewable" ON public.profiles FOR SELECT USING (tr
         key: localStorage.getItem('insforge_key') || '',
         connected: false
       },
+      contacts: [
+        { id: 'u_sarah', name: 'Sarah Jenkins', username: 'sarah_j', avatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150', bio: 'Product Designer in SF ✨', online: true, isBlocked: false },
+        { id: 'u_david', name: 'David Chen', username: 'david_dev', avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150', bio: 'Full-stack & Mobile Engineer 💻', online: true, isBlocked: false },
+        { id: 'u_elena', name: 'Elena Rostova', username: 'elena_art', avatar: 'https://images.unsplash.com/photo-1517841905240-472988babdf9?w=150', bio: 'Digital Illustrator 🎨', online: false, isBlocked: false },
+        { id: 'u_marcus', name: 'Marcus Vance', username: 'marcus_v', avatar: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150', bio: 'Music Producer & Audio Nerd 🎧', online: true, isBlocked: false }
+      ],
       chats: [
         {
           id: 'c1',
@@ -852,24 +938,56 @@ CREATE POLICY "Public profiles viewable" ON public.profiles FOR SELECT USING (tr
       const container = document.getElementById('conversations-container');
       if (!container) return;
 
-      container.innerHTML = state.chats.map(chat => `
-        <div onclick="selectChat('${chat.id}')" class="p-3.5 flex items-center space-x-3 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800/60 transition ${state.activeChatId === chat.id ? 'bg-connect-light/40 dark:bg-blue-950/30' : ''}">
-          <div class="relative flex-shrink-0">
-            <img src="${chat.avatar}" alt="${chat.name}" class="w-12 h-12 rounded-full object-cover">
-            ${chat.online ? '<span class="absolute bottom-0 right-0 w-3 h-3 bg-connect-online border-2 border-white dark:border-slate-900 rounded-full"></span>' : ''}
+      const query = (document.getElementById('chat-search')?.value || '').trim().toLowerCase();
+      const filtered = state.chats.filter(c =>
+        !query ||
+        c.name.toLowerCase().includes(query) ||
+        (c.lastMsg || '').toLowerCase().includes(query)
+      );
+
+      if (filtered.length === 0) {
+        container.innerHTML = `
+          <div class="p-8 text-center text-slate-400 space-y-2">
+            <i data-lucide="message-circle" class="w-10 h-10 mx-auto opacity-40"></i>
+            <p class="text-sm font-semibold">${query ? 'No conversations match your search' : 'No conversations yet'}</p>
+            <button onclick="openNewChatModal()" class="mt-2 px-4 py-1.5 bg-connect-blue text-white text-xs font-bold rounded-full">Start New Chat</button>
           </div>
-          <div class="flex-1 min-w-0">
-            <div class="flex justify-between items-baseline mb-1">
-              <h4 class="text-sm font-bold truncate text-slate-900 dark:text-slate-100">${chat.name}</h4>
-              <span class="text-[11px] text-slate-400">${chat.time}</span>
+        `;
+      } else {
+        container.innerHTML = filtered.map(chat => `
+          <div onclick="selectChat('${chat.id}')" class="group p-3.5 flex items-center space-x-3 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800/60 transition ${state.activeChatId === chat.id ? 'bg-connect-light/40 dark:bg-blue-950/30' : ''}">
+            <div onclick="event.stopPropagation(); openProfileForChat('${chat.id}')" title="View Profile" class="relative flex-shrink-0 cursor-pointer hover:scale-105 transition">
+              <img src="${chat.avatar}" alt="${chat.name}" class="w-12 h-12 rounded-full object-cover">
+              ${chat.online ? '<span class="absolute bottom-0 right-0 w-3 h-3 bg-connect-online border-2 border-white dark:border-slate-900 rounded-full"></span>' : ''}
             </div>
-            <div class="flex justify-between items-center">
-              <p class="text-xs text-slate-500 dark:text-slate-400 truncate pr-2">${chat.lastMsg}</p>
-              ${chat.unread > 0 ? `<span class="bg-connect-blue text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full">${chat.unread}</span>` : ''}
+            <div class="flex-1 min-w-0">
+              <div class="flex justify-between items-baseline mb-1">
+                <h4 class="text-sm font-bold truncate text-slate-900 dark:text-slate-100">${chat.name}</h4>
+                <span class="text-[11px] text-slate-400">${chat.time}</span>
+              </div>
+              <div class="flex justify-between items-center">
+                <p class="text-xs text-slate-500 dark:text-slate-400 truncate pr-2">${chat.lastMsg}</p>
+                ${chat.unread > 0 ? `<span class="bg-connect-blue text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full">${chat.unread}</span>` : ''}
+              </div>
             </div>
+            <button onclick="event.stopPropagation(); openChatActionModal('${chat.id}')" title="Chat Options" class="p-2 rounded-full text-slate-400 hover:text-connect-blue hover:bg-slate-200/70 dark:hover:bg-slate-700 transition">
+              <i data-lucide="more-horizontal" class="w-4 h-4"></i>
+            </button>
           </div>
-        </div>
-      `).join('');
+        `).join('');
+      }
+
+      // Update sidebar unread badge
+      const unreadTotal = state.chats.reduce((acc, c) => acc + (c.unread || 0), 0);
+      const badge = document.getElementById('sidebar-unread');
+      if (badge) {
+        badge.innerText = unreadTotal;
+        badge.classList.toggle('hidden', unreadTotal === 0);
+      }
+
+      // Update profile stats
+      const chatsCountEl = document.getElementById('stats-chats-count');
+      if (chatsCountEl) chatsCountEl.innerText = state.chats.length;
 
       // Render Stories Avatars in Header Reel
       const storiesReel = document.getElementById('stories-reel-items');
@@ -883,6 +1001,12 @@ CREATE POLICY "Public profiles viewable" ON public.profiles FOR SELECT USING (tr
           </button>
         `).join('');
       }
+
+      lucide.createIcons();
+    }
+
+    function filterChats() {
+      renderChatsList();
     }
 
     // Select Active Chat
@@ -892,6 +1016,7 @@ CREATE POLICY "Public profiles viewable" ON public.profiles FOR SELECT USING (tr
       if (chat) chat.unread = 0;
       renderChatsList();
       renderActiveChat();
+      if (state.showChatProfile) renderChatProfileDrawer();
 
       // On mobile show chat pane
       const chatPane = document.getElementById('chat-conversation-pane');
@@ -902,7 +1027,16 @@ CREATE POLICY "Public profiles viewable" ON public.profiles FOR SELECT USING (tr
       }
     }
 
+    function openProfileForChat(chatId) {
+      selectChat(chatId);
+      state.showChatProfile = true;
+      renderChatProfileDrawer();
+    }
+
     function backToChatList() {
+      state.showChatProfile = false;
+      const drawer = document.getElementById('chat-profile-drawer');
+      if (drawer) drawer.classList.add('hidden');
       const chatPane = document.getElementById('chat-conversation-pane');
       const listPane = document.getElementById('chats-list-pane');
       chatPane.classList.add('hidden');
@@ -912,57 +1046,419 @@ CREATE POLICY "Public profiles viewable" ON public.profiles FOR SELECT USING (tr
     // Render Active Conversation
     function renderActiveChat() {
       const chat = state.chats.find(c => c.id === state.activeChatId) || state.chats[0];
-      if (!chat) return;
-
       const header = document.getElementById('active-chat-header');
+      const msgContainer = document.getElementById('messages-container');
+
+      if (!chat) {
+        if (header) header.innerHTML = '<div class="text-sm text-slate-400">Select or start a new conversation</div>';
+        if (msgContainer) msgContainer.innerHTML = '<div class="h-full flex flex-col items-center justify-center text-slate-400 space-y-2"><p class="text-sm">No active conversation</p><button onclick="openNewChatModal()" class="px-4 py-2 bg-connect-blue text-white text-xs font-bold rounded-full">New Chat</button></div>';
+        state.showChatProfile = false;
+        const drawer = document.getElementById('chat-profile-drawer');
+        if (drawer) drawer.classList.add('hidden');
+        return;
+      }
+      state.activeChatId = chat.id;
+
       if (header) {
         header.innerHTML = `
           <div class="flex items-center space-x-3">
             <button onclick="backToChatList()" class="md:hidden p-1 text-slate-500"><i data-lucide="arrow-left" class="w-5 h-5"></i></button>
-            <img src="${chat.avatar}" alt="${chat.name}" class="w-10 h-10 rounded-full object-cover">
-            <div>
-              <h3 class="text-sm font-bold text-slate-900 dark:text-slate-100">${chat.name}</h3>
-              <span class="text-[11px] ${chat.online ? 'text-connect-online font-semibold' : 'text-slate-400'}">${chat.online ? 'Online' : 'Offline'}</span>
+            <div onclick="toggleChatProfileDrawer(true)" class="flex items-center space-x-3 cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800 px-2 py-1 rounded-xl transition" title="View Chat Profile & Options">
+              <div class="relative">
+                <img src="${chat.avatar}" alt="${chat.name}" class="w-10 h-10 rounded-full object-cover">
+                ${chat.online ? '<span class="absolute bottom-0 right-0 w-2.5 h-2.5 bg-connect-online border-2 border-white dark:border-slate-900 rounded-full"></span>' : ''}
+              </div>
+              <div>
+                <h3 class="text-sm font-bold text-slate-900 dark:text-slate-100 flex items-center space-x-1">
+                  <span>${chat.name}</span>
+                  <i data-lucide="chevron-right" class="w-3.5 h-3.5 text-slate-400"></i>
+                </h3>
+                <span class="text-[11px] ${chat.online ? 'text-connect-online font-semibold' : 'text-slate-400'}">${chat.online ? 'Active now' : 'Offline'}</span>
+              </div>
             </div>
           </div>
           <div class="flex items-center space-x-1 text-connect-blue">
-            <button onclick="startCall('${chat.name}', 'voice')" class="p-2 hover:bg-connect-light dark:hover:bg-slate-800 rounded-full transition"><i data-lucide="phone" class="w-5 h-5"></i></button>
-            <button onclick="startCall('${chat.name}', 'video')" class="p-2 hover:bg-connect-light dark:hover:bg-slate-800 rounded-full transition"><i data-lucide="video" class="w-5 h-5"></i></button>
+            <button onclick="startCall('${chat.name}', 'voice')" class="p-2 hover:bg-connect-light dark:hover:bg-slate-800 rounded-full transition" title="Audio Call"><i data-lucide="phone" class="w-5 h-5"></i></button>
+            <button onclick="startCall('${chat.name}', 'video')" class="p-2 hover:bg-connect-light dark:hover:bg-slate-800 rounded-full transition" title="Video Call"><i data-lucide="video" class="w-5 h-5"></i></button>
+            <button onclick="toggleChatProfileDrawer()" class="p-2 hover:bg-connect-light dark:hover:bg-slate-800 rounded-full transition" title="Chat Info & Profile"><i data-lucide="info" class="w-5 h-5"></i></button>
           </div>
         `;
       }
 
-      const msgContainer = document.getElementById('messages-container');
       if (msgContainer) {
-        msgContainer.innerHTML = chat.messages.map(m => `
-          <div class="flex flex-col ${m.fromMe ? 'items-end' : 'items-start'}">
-            <div class="max-w-[75%] rounded-2xl p-3 shadow-sm ${m.fromMe ? 'bg-connect-blue text-white rounded-br-sm' : 'bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 rounded-bl-sm border border-slate-100 dark:border-slate-700/50'}">
-              ${m.isVoice ? `
-                <div class="flex items-center space-x-2 py-1">
-                  <button onclick="this.classList.toggle('text-sky-300')" class="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center"><i data-lucide="play" class="w-4 h-4"></i></button>
-                  <div class="flex space-x-1 items-center">
-                    <span class="w-1 h-3 bg-white/70 rounded"></span>
-                    <span class="w-1 h-5 bg-white rounded"></span>
-                    <span class="w-1 h-7 bg-white/80 rounded"></span>
-                    <span class="w-1 h-4 bg-white/90 rounded"></span>
-                    <span class="w-1 h-6 bg-white rounded"></span>
-                    <span class="w-1 h-3 bg-white/70 rounded"></span>
+        if (chat.messages.length === 0) {
+          msgContainer.innerHTML = `<div class="h-full flex flex-col items-center justify-center text-slate-400 text-xs">No messages yet. Say hi to ${chat.name}! 👋</div>`;
+        } else {
+          msgContainer.innerHTML = chat.messages.map(m => `
+            <div class="group flex flex-col ${m.fromMe ? 'items-end' : 'items-start'}">
+              <div class="flex items-center space-x-1.5 ${m.fromMe ? 'flex-row-reverse space-x-reverse' : ''}">
+                <div class="max-w-[75%] md:max-w-md rounded-2xl p-3 shadow-sm ${m.deleted ? 'bg-slate-200 dark:bg-slate-800 text-slate-400 italic' : m.fromMe ? 'bg-connect-blue text-white rounded-br-sm' : 'bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 rounded-bl-sm border border-slate-100 dark:border-slate-700/50'}">
+                  ${m.isVoice && !m.deleted ? `
+                    <div class="flex items-center space-x-2 py-1">
+                      <button onclick="this.classList.toggle('text-sky-300')" class="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center"><i data-lucide="play" class="w-4 h-4"></i></button>
+                      <div class="flex space-x-1 items-center">
+                        <span class="w-1 h-3 bg-white/70 rounded"></span>
+                        <span class="w-1 h-5 bg-white rounded"></span>
+                        <span class="w-1 h-7 bg-white/80 rounded"></span>
+                        <span class="w-1 h-4 bg-white/90 rounded"></span>
+                        <span class="w-1 h-6 bg-white rounded"></span>
+                        <span class="w-1 h-3 bg-white/70 rounded"></span>
+                      </div>
+                      <span class="text-[10px] opacity-80 pl-1">0:14</span>
+                    </div>
+                  ` : `<p class="text-sm leading-relaxed">${m.text}</p>`}
+                  <div class="flex items-center justify-end space-x-1 mt-1 text-[10px] ${m.deleted ? 'text-slate-400' : m.fromMe ? 'text-white/80' : 'text-slate-400'}">
+                    <span>${m.time}</span>
+                    ${m.fromMe && !m.deleted ? '<i data-lucide="check-check" class="w-3.5 h-3.5 text-cyan-200"></i>' : ''}
                   </div>
-                  <span class="text-[10px] opacity-80 pl-1">0:14</span>
                 </div>
-              ` : `<p class="text-sm leading-relaxed">${m.text}</p>`}
-              <div class="flex items-center justify-end space-x-1 mt-1 text-[10px] ${m.fromMe ? 'text-white/80' : 'text-slate-400'}">
-                <span>${m.time}</span>
-                ${m.fromMe ? '<i data-lucide="check-check" class="w-3.5 h-3.5 text-cyan-200"></i>' : ''}
+                ${!m.deleted ? `
+                  <button onclick="deleteMessage('${chat.id}', '${m.id}')" title="Delete message" class="opacity-0 group-hover:opacity-100 p-1.5 text-slate-400 hover:text-red-500 rounded-full hover:bg-slate-200/60 dark:hover:bg-slate-800 transition">
+                    <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+                  </button>
+                ` : ''}
               </div>
             </div>
-          </div>
-        `).join('');
+          `).join('');
+        }
 
         msgContainer.scrollTop = msgContainer.scrollHeight;
       }
 
+      if (state.showChatProfile) {
+        renderChatProfileDrawer();
+      }
+
       lucide.createIcons();
+    }
+
+    // Messenger Chat Profile Drawer
+    function toggleChatProfileDrawer(forceOpen) {
+      state.showChatProfile = typeof forceOpen === 'boolean' ? forceOpen : !state.showChatProfile;
+      const drawer = document.getElementById('chat-profile-drawer');
+      if (!drawer) return;
+      if (state.showChatProfile) {
+        renderChatProfileDrawer();
+        drawer.classList.remove('hidden');
+        drawer.classList.add('flex');
+      } else {
+        drawer.classList.add('hidden');
+        drawer.classList.remove('flex');
+      }
+      lucide.createIcons();
+    }
+
+    function renderChatProfileDrawer() {
+      const drawer = document.getElementById('chat-profile-drawer');
+      const chat = state.chats.find(c => c.id === state.activeChatId);
+      if (!drawer || !chat) return;
+      const contact = state.contacts.find(u => u.username === chat.username || u.name === chat.name);
+
+      drawer.innerHTML = `
+        <div class="p-4 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between sticky top-0 bg-white dark:bg-slate-900 z-10">
+          <span class="text-sm font-bold">Chat Profile</span>
+          <button onclick="toggleChatProfileDrawer(false)" class="p-1.5 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500">
+            <i data-lucide="x" class="w-5 h-5"></i>
+          </button>
+        </div>
+
+        <div class="p-6 flex flex-col items-center text-center border-b border-slate-100 dark:border-slate-800">
+          <div class="relative mb-3">
+            <img src="${chat.avatar}" class="w-24 h-24 rounded-full object-cover border-4 border-connect-light dark:border-blue-900/40 shadow-md">
+            ${chat.online ? '<span class="absolute bottom-1 right-1 w-5 h-5 bg-connect-online border-2 border-white dark:border-slate-900 rounded-full"></span>' : ''}
+          </div>
+          <h3 class="text-lg font-extrabold">${chat.name}</h3>
+          ${chat.username ? `<p class="text-xs font-semibold text-connect-blue">@${chat.username}</p>` : ''}
+          <p class="text-xs text-slate-500 mt-1">${contact ? contact.bio : (chat.isGroup ? 'Group Conversation on CONNECT' : (chat.online ? 'Active now' : 'Offline'))}</p>
+
+          <!-- Messenger Quick Action Circles -->
+          <div class="grid grid-cols-3 gap-5 mt-5">
+            <button onclick="startCall('${chat.name}', 'voice')" class="flex flex-col items-center space-y-1 group">
+              <div class="w-10 h-10 rounded-full bg-slate-100 dark:bg-slate-800 group-hover:bg-connect-light dark:group-hover:bg-blue-950 flex items-center justify-center text-slate-700 dark:text-slate-200 group-hover:text-connect-blue transition">
+                <i data-lucide="phone" class="w-4 h-4"></i>
+              </div>
+              <span class="text-[11px] font-medium">Audio</span>
+            </button>
+            <button onclick="startCall('${chat.name}', 'video')" class="flex flex-col items-center space-y-1 group">
+              <div class="w-10 h-10 rounded-full bg-slate-100 dark:bg-slate-800 group-hover:bg-connect-light dark:group-hover:bg-blue-950 flex items-center justify-center text-slate-700 dark:text-slate-200 group-hover:text-connect-blue transition">
+                <i data-lucide="video" class="w-4 h-4"></i>
+              </div>
+              <span class="text-[11px] font-medium">Video</span>
+            </button>
+            <button onclick="alert('Notifications muted for ${chat.name}')" class="flex flex-col items-center space-y-1 group">
+              <div class="w-10 h-10 rounded-full bg-slate-100 dark:bg-slate-800 group-hover:bg-connect-light dark:group-hover:bg-blue-950 flex items-center justify-center text-slate-700 dark:text-slate-200 group-hover:text-connect-blue transition">
+                <i data-lucide="bell-off" class="w-4 h-4"></i>
+              </div>
+              <span class="text-[11px] font-medium">Mute</span>
+            </button>
+          </div>
+        </div>
+
+        <div class="p-4 space-y-2">
+          <p class="text-[11px] font-bold uppercase tracking-wider text-slate-400 px-2">Privacy & Support</p>
+
+          <button onclick="clearChatHistory('${chat.id}')" class="w-full flex items-center space-x-3 px-3 py-2.5 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 text-left transition">
+            <i data-lucide="eraser" class="w-4 h-4 text-slate-500"></i>
+            <span class="text-sm font-semibold">Clear Messages</span>
+          </button>
+
+          ${!chat.isGroup ? `
+            <button onclick="blockUserFromChat('${chat.id}')" class="w-full flex items-center space-x-3 px-3 py-2.5 rounded-xl hover:bg-red-50 dark:hover:bg-red-950/30 text-red-600 text-left transition">
+              <i data-lucide="ban" class="w-4 h-4"></i>
+              <span class="text-sm font-semibold">Block ${chat.name}</span>
+            </button>
+          ` : ''}
+
+          <button onclick="deleteChat('${chat.id}')" class="w-full flex items-center space-x-3 px-3 py-2.5 rounded-xl hover:bg-red-50 dark:hover:bg-red-950/30 text-red-600 text-left transition">
+            <i data-lucide="trash-2" class="w-4 h-4"></i>
+            <span class="text-sm font-semibold">Delete Chat</span>
+          </button>
+
+          <button onclick="alert('Report submitted for review.'); toggleChatProfileDrawer(false);" class="w-full flex items-center space-x-3 px-3 py-2.5 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300 text-left transition">
+            <i data-lucide="flag" class="w-4 h-4"></i>
+            <span class="text-sm font-semibold">Report Something</span>
+          </button>
+        </div>
+      `;
+      drawer.classList.remove('hidden');
+      drawer.classList.add('flex');
+      lucide.createIcons();
+    }
+
+    // Messenger Chat List Quick Action Modal
+    function openChatActionModal(chatId) {
+      const chat = state.chats.find(c => c.id === chatId);
+      if (!chat) return;
+      const modal = document.getElementById('chat-action-modal');
+      const content = document.getElementById('chat-action-modal-content');
+      content.innerHTML = `
+        <div class="flex items-center space-x-3 pb-3 border-b border-slate-100 dark:border-slate-800">
+          <img src="${chat.avatar}" class="w-11 h-11 rounded-full object-cover">
+          <div>
+            <h4 class="font-bold text-sm">${chat.name}</h4>
+            <p class="text-xs text-slate-400">${chat.isGroup ? 'Group Chat' : (chat.username ? '@' + chat.username : 'Direct Chat')}</p>
+          </div>
+        </div>
+        <button onclick="closeChatActionModal(); openProfileForChat('${chat.id}')" class="w-full flex items-center space-x-3 p-3 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 text-left transition">
+          <i data-lucide="user" class="w-4 h-4 text-connect-blue"></i>
+          <span class="text-sm font-semibold">View Profile & Chat Info</span>
+        </button>
+        <button onclick="closeChatActionModal(); clearChatHistory('${chat.id}')" class="w-full flex items-center space-x-3 p-3 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 text-left transition">
+          <i data-lucide="eraser" class="w-4 h-4 text-slate-500"></i>
+          <span class="text-sm font-semibold">Clear Messages</span>
+        </button>
+        ${!chat.isGroup ? `
+          <button onclick="closeChatActionModal(); blockUserFromChat('${chat.id}')" class="w-full flex items-center space-x-3 p-3 rounded-xl hover:bg-red-50 dark:hover:bg-red-950/30 text-red-600 text-left transition">
+            <i data-lucide="ban" class="w-4 h-4"></i>
+            <span class="text-sm font-semibold">Block ${chat.name}</span>
+          </button>
+        ` : ''}
+        <button onclick="closeChatActionModal(); deleteChat('${chat.id}')" class="w-full flex items-center space-x-3 p-3 rounded-xl hover:bg-red-50 dark:hover:bg-red-950/30 text-red-600 text-left transition">
+          <i data-lucide="trash-2" class="w-4 h-4"></i>
+          <span class="text-sm font-semibold">Delete Chat</span>
+        </button>
+      `;
+      modal.classList.remove('hidden');
+      lucide.createIcons();
+    }
+
+    function closeChatActionModal() {
+      document.getElementById('chat-action-modal').classList.add('hidden');
+    }
+
+    function deleteChat(chatId) {
+      const chat = state.chats.find(c => c.id === chatId);
+      if (!chat) return;
+      if (!confirm(`Delete conversation with ${chat.name}?`)) return;
+      state.chats = state.chats.filter(c => c.id !== chatId);
+      if (state.activeChatId === chatId) {
+        state.activeChatId = state.chats[0]?.id || null;
+        state.showChatProfile = false;
+      }
+      renderChatsList();
+      renderActiveChat();
+    }
+
+    function clearChatHistory(chatId) {
+      const chat = state.chats.find(c => c.id === chatId);
+      if (!chat) return;
+      chat.messages = [];
+      chat.lastMsg = 'No messages';
+      renderChatsList();
+      renderActiveChat();
+    }
+
+    function deleteMessage(chatId, msgId) {
+      const chat = state.chats.find(c => c.id === chatId);
+      if (!chat) return;
+      chat.messages = chat.messages.map(m => m.id === msgId ? { ...m, text: 'You unsent a message', deleted: true } : m);
+      renderActiveChat();
+    }
+
+    function blockUserFromChat(chatId) {
+      const chat = state.chats.find(c => c.id === chatId);
+      if (!chat) return;
+      if (!confirm(`Block ${chat.name}? They won't be able to message or call you, and this chat will be removed.`)) return;
+      const contact = state.contacts.find(u => u.username === chat.username || u.name === chat.name);
+      if (contact) contact.isBlocked = true;
+      state.chats = state.chats.filter(c => c.id !== chatId);
+      if (state.activeChatId === chatId) {
+        state.activeChatId = state.chats[0]?.id || null;
+        state.showChatProfile = false;
+      }
+      renderChatsList();
+      renderActiveChat();
+      renderContacts();
+      updateBlockedBadge();
+    }
+
+    // Messenger New Chat Modal
+    function openNewChatModal() {
+      document.getElementById('new-chat-modal').classList.remove('hidden');
+      document.getElementById('new-chat-search').value = '';
+      renderNewChatUsers();
+      lucide.createIcons();
+    }
+
+    function closeNewChatModal() {
+      document.getElementById('new-chat-modal').classList.add('hidden');
+    }
+
+    function renderNewChatUsers() {
+      const list = document.getElementById('new-chat-users-list');
+      if (!list) return;
+      const q = (document.getElementById('new-chat-search')?.value || '').trim().toLowerCase();
+      const users = state.contacts.filter(u => !u.isBlocked && (!q || u.name.toLowerCase().includes(q) || u.username.toLowerCase().includes(q)));
+      if (users.length === 0) {
+        list.innerHTML = '<p class="text-xs text-slate-400 text-center py-6">No matching people found</p>';
+        return;
+      }
+      list.innerHTML = users.map(u => `
+        <button onclick="startDirectChat('${u.id}')" class="w-full flex items-center space-x-3 p-2.5 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 text-left transition">
+          <div class="relative">
+            <img src="${u.avatar}" class="w-10 h-10 rounded-full object-cover">
+            ${u.online ? '<span class="absolute bottom-0 right-0 w-2.5 h-2.5 bg-connect-online border-2 border-white dark:border-slate-900 rounded-full"></span>' : ''}
+          </div>
+          <div class="flex-1 min-w-0">
+            <h4 class="text-sm font-bold truncate">${u.name}</h4>
+            <p class="text-xs text-connect-blue">@${u.username}</p>
+          </div>
+          <span class="text-xs font-semibold text-connect-blue">Chat</span>
+        </button>
+      `).join('');
+    }
+
+    function startDirectChat(userId) {
+      const user = state.contacts.find(u => u.id === userId);
+      if (!user) return;
+      user.isBlocked = false;
+      let existing = state.chats.find(c => !c.isGroup && (c.username === user.username || c.name === user.name));
+      if (!existing) {
+        existing = {
+          id: 'chat_' + Date.now(),
+          name: user.name,
+          username: user.username,
+          avatar: user.avatar,
+          online: user.online,
+          lastMsg: 'Say hi to ' + user.name + ' 👋',
+          time: 'Just now',
+          unread: 0,
+          isGroup: false,
+          messages: []
+        };
+        state.chats.unshift(existing);
+      }
+      closeNewChatModal();
+      switchTab('chats');
+      selectChat(existing.id);
+    }
+
+    // Create Group Modal
+    function openNewGroupModal() {
+      const modal = document.getElementById('new-group-modal');
+      const membersList = document.getElementById('new-group-members-list');
+      membersList.innerHTML = state.contacts.filter(u => !u.isBlocked).map(u => `
+        <label class="flex items-center space-x-3 p-2 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer">
+          <input type="checkbox" value="${u.id}" class="group-member-cb w-4 h-4 accent-connect-blue rounded">
+          <img src="${u.avatar}" class="w-8 h-8 rounded-full object-cover">
+          <span class="text-sm font-semibold">${u.name}</span>
+        </label>
+      `).join('');
+      modal.classList.remove('hidden');
+      lucide.createIcons();
+    }
+
+    function closeNewGroupModal() {
+      document.getElementById('new-group-modal').classList.add('hidden');
+    }
+
+    function createGroupChat() {
+      const name = document.getElementById('new-group-name').value.trim();
+      if (!name) return alert('Please enter a group name.');
+      const newGroup = {
+        id: 'grp_' + Date.now(),
+        name: name,
+        avatar: 'https://images.unsplash.com/photo-1522071820081-009f0129c71c?w=150',
+        online: true,
+        lastMsg: 'Group created!',
+        time: 'Just now',
+        unread: 0,
+        isGroup: true,
+        messages: [{ id: 'gm_' + Date.now(), fromMe: true, text: `Welcome to ${name}!`, time: 'Just now' }]
+      };
+      state.chats.unshift(newGroup);
+      document.getElementById('new-group-name').value = '';
+      closeNewGroupModal();
+      switchTab('chats');
+      selectChat(newGroup.id);
+    }
+
+    // Blocked Users Modal
+    function openBlockedUsersModal() {
+      const modal = document.getElementById('blocked-users-modal');
+      renderBlockedUsersList();
+      modal.classList.remove('hidden');
+      lucide.createIcons();
+    }
+
+    function closeBlockedUsersModal() {
+      document.getElementById('blocked-users-modal').classList.add('hidden');
+    }
+
+    function renderBlockedUsersList() {
+      const list = document.getElementById('blocked-users-list');
+      if (!list) return;
+      const blocked = state.contacts.filter(u => u.isBlocked);
+      if (blocked.length === 0) {
+        list.innerHTML = '<p class="text-xs text-slate-400 text-center py-6">No blocked accounts. Users you block from chats will appear here.</p>';
+        return;
+      }
+      list.innerHTML = blocked.map(u => `
+        <div class="flex items-center justify-between p-2.5 bg-slate-50 dark:bg-slate-800 rounded-xl">
+          <div class="flex items-center space-x-3">
+            <img src="${u.avatar}" class="w-10 h-10 rounded-full object-cover">
+            <div>
+              <h4 class="text-sm font-bold">${u.name}</h4>
+              <p class="text-xs text-slate-400">@${u.username}</p>
+            </div>
+          </div>
+          <button onclick="unblockUser('${u.id}')" class="px-3 py-1 bg-connect-blue text-white text-xs font-bold rounded-lg">Unblock</button>
+        </div>
+      `).join('');
+    }
+
+    function unblockUser(userId) {
+      const user = state.contacts.find(u => u.id === userId);
+      if (user) user.isBlocked = false;
+      renderBlockedUsersList();
+      renderContacts();
+      updateBlockedBadge();
+    }
+
+    function updateBlockedBadge() {
+      const count = state.contacts.filter(u => u.isBlocked).length;
+      const sub = document.getElementById('profile-blocked-subtitle');
+      if (sub) sub.innerText = count === 0 ? 'No blocked users' : `${count} blocked user(s) — tap to manage`;
     }
 
     // Message Input
@@ -1141,12 +1637,8 @@ CREATE POLICY "Public profiles viewable" ON public.profiles FOR SELECT USING (tr
     function renderContacts() {
       const container = document.getElementById('contacts-list-container');
       if (!container) return;
-      const contacts = [
-        { name: 'Sarah Jenkins', user: 'sarah_j', avatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150', bio: 'Product Designer in SF' },
-        { name: 'David Chen', user: 'david_dev', avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150', bio: 'Full-stack & Mobile Engineer' },
-        { name: 'Elena Rostova', user: 'elena_art', avatar: 'https://images.unsplash.com/photo-1517841905240-472988babdf9?w=150', bio: 'Digital Illustrator' },
-        { name: 'Marcus Vance', user: 'marcus_v', avatar: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150', bio: 'Music Producer' }
-      ];
+      const q = (document.getElementById('contact-search')?.value || '').trim().toLowerCase();
+      const contacts = state.contacts.filter(c => !c.isBlocked && (!q || c.name.toLowerCase().includes(q) || c.username.toLowerCase().includes(q)));
 
       container.innerHTML = contacts.map(c => `
         <div class="p-3 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 flex items-center justify-between shadow-sm">
@@ -1154,15 +1646,19 @@ CREATE POLICY "Public profiles viewable" ON public.profiles FOR SELECT USING (tr
             <img src="${c.avatar}" class="w-11 h-11 rounded-full object-cover">
             <div>
               <h4 class="font-bold text-sm">${c.name}</h4>
-              <p class="text-xs text-connect-blue font-medium">@${c.user}</p>
+              <p class="text-xs text-connect-blue font-medium">@${c.username}</p>
               <p class="text-[11px] text-slate-400">${c.bio}</p>
             </div>
           </div>
-          <button onclick="switchTab('chats')" class="px-3 py-1.5 bg-connect-blue hover:bg-connect-dark text-white rounded-lg text-xs font-semibold transition">
+          <button onclick="startDirectChat('${c.id}')" class="px-3 py-1.5 bg-connect-blue hover:bg-connect-dark text-white rounded-lg text-xs font-semibold transition">
             Chat
           </button>
         </div>
       `).join('');
+    }
+
+    function filterContacts() {
+      renderContacts();
     }
 
     // Calls List

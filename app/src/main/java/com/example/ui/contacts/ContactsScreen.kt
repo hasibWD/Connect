@@ -183,8 +183,7 @@ fun ContactsScreen(
           ContactCard(
             user = user,
             onChatClick = {
-              viewModel.addFriend(user.id)
-              viewModel.openChat("chat_" + user.id)
+              viewModel.startDirectChat(user.id)
             },
             onBlockClick = {
               viewModel.blockUser(user.id)

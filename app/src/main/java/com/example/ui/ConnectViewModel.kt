@@ -350,6 +350,10 @@ class ConnectViewModel(application: Application) : AndroidViewModel(application)
     repository.clearChatHistory(chatId)
   }
 
+  fun markChatAsRead(chatId: String) {
+    repository.markChatAsRead(chatId)
+  }
+
   fun startDirectChat(userId: String) {
     val chatId = repository.startDirectChat(userId)
     if (chatId.isNotBlank()) {

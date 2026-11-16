@@ -86,6 +86,7 @@ import com.example.ui.theme.ConnectBluePrimary
 import com.example.ui.theme.ConnectCyanAccent
 import com.example.ui.theme.ConnectRedError
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ChatListScreen(
   viewModel: ConnectViewModel,
@@ -251,7 +252,9 @@ fun ChatListScreen(
           items(chats, key = { it.id }) { chat ->
             ChatItem(
               chat = chat,
-              onClick = { viewModel.openChat(chat.id) }
+              onClick = { viewModel.openChat(chat.id) },
+              onLongClick = { selectedChatForActions = chat },
+              onAvatarClick = { selectedChatForProfile = chat }
             )
             HorizontalDivider(
               modifier = Modifier.padding(start = 76.dp),
@@ -304,7 +307,7 @@ fun ChatListScreen(
             modifier = Modifier
               .clickable {
                 showFabMenu = false
-                viewModel.setTab(MainTab.CONTACTS)
+                viewModel.setShowNewChatDialog(true)
               }
               .testTag("new_chat_option")
           ) {
@@ -333,6 +336,187 @@ fun ChatListScreen(
         )
       }
     }
+  }
+
+  // Messenger Chat Profile Bottom Sheet
+  selectedChatForProfile?.let { chat ->
+    ChatProfileSheet(
+      chat = chat,
+      viewModel = viewModel,
+      onDismiss = { selectedChatForProfile = null }
+    )
+  }
+
+  // Messenger Long-Press / More Actions Sheet
+  selectedChatForActions?.let { chat ->
+    val otherParticipant = chat.participants.firstOrNull { it.id != currentUser?.id }
+    ModalBottomSheet(
+      onDismissRequest = { selectedChatForActions = null },
+      sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+      containerColor = MaterialTheme.colorScheme.surface
+    ) {
+      Column(
+        modifier = Modifier
+          .fillMaxWidth()
+          .padding(horizontal = 16.dp)
+          .padding(bottom = 28.dp)
+      ) {
+        Row(
+          verticalAlignment = Alignment.CenterVertically,
+          modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 8.dp, vertical = 10.dp)
+        ) {
+          ConnectAvatar(
+            avatarUrl = chat.avatarUrl,
+            name = chat.name,
+            size = 48.dp,
+            isOnline = chat.participants.any { it.isOnline },
+            showOnlineBadge = chat.type == ChatType.DIRECT
+          )
+          Spacer(modifier = Modifier.width(12.dp))
+          Column(modifier = Modifier.weight(1f)) {
+            Text(
+              text = chat.name,
+              style = MaterialTheme.typography.titleMedium,
+              fontWeight = FontWeight.Bold
+            )
+            Text(
+              text = if (chat.type == ChatType.GROUP) "${chat.participants.size} members" else "@${otherParticipant?.username ?: "connect_user"}",
+              style = MaterialTheme.typography.bodySmall,
+              color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+          }
+        }
+
+        HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+
+        Row(
+          modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .clickable {
+              selectedChatForActions = null
+              selectedChatForProfile = chat
+            }
+            .padding(horizontal = 12.dp, vertical = 14.dp)
+            .testTag("action_view_chat_profile"),
+          verticalAlignment = Alignment.CenterVertically
+        ) {
+          Icon(Icons.Default.Person, contentDescription = null, tint = ConnectBluePrimary)
+          Spacer(modifier = Modifier.width(14.dp))
+          Text("View Profile & Chat Info", style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium)
+        }
+
+        if (chat.unreadCount > 0) {
+          Row(
+            modifier = Modifier
+              .fillMaxWidth()
+              .clip(RoundedCornerShape(12.dp))
+              .clickable {
+                viewModel.markChatAsRead(chat.id)
+                selectedChatForActions = null
+              }
+              .padding(horizontal = 12.dp, vertical = 14.dp),
+            verticalAlignment = Alignment.CenterVertically
+          ) {
+            Icon(Icons.Default.DoneAll, contentDescription = null, tint = ConnectBluePrimary)
+            Spacer(modifier = Modifier.width(14.dp))
+            Text("Mark as Read", style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium)
+          }
+        }
+
+        if (chat.type == ChatType.DIRECT && otherParticipant != null) {
+          Row(
+            modifier = Modifier
+              .fillMaxWidth()
+              .clip(RoundedCornerShape(12.dp))
+              .clickable {
+                selectedChatForActions = null
+                userToBlock = otherParticipant
+              }
+              .padding(horizontal = 12.dp, vertical = 14.dp)
+              .testTag("action_block_user"),
+            verticalAlignment = Alignment.CenterVertically
+          ) {
+            Icon(Icons.Default.Block, contentDescription = null, tint = ConnectRedError)
+            Spacer(modifier = Modifier.width(14.dp))
+            Text("Block ${otherParticipant.name}", style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium, color = ConnectRedError)
+          }
+        }
+
+        Row(
+          modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .clickable {
+              selectedChatForActions = null
+              chatToDelete = chat
+            }
+            .padding(horizontal = 12.dp, vertical = 14.dp)
+            .testTag("action_delete_chat"),
+          verticalAlignment = Alignment.CenterVertically
+        ) {
+          Icon(Icons.Default.Delete, contentDescription = null, tint = ConnectRedError)
+          Spacer(modifier = Modifier.width(14.dp))
+          Text("Delete Chat", style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium, color = ConnectRedError)
+        }
+      }
+    }
+  }
+
+  // Delete Chat Confirmation Dialog
+  chatToDelete?.let { chat ->
+    AlertDialog(
+      onDismissRequest = { chatToDelete = null },
+      title = { Text("Delete Chat?", fontWeight = FontWeight.Bold) },
+      text = {
+        Text("Are you sure you want to delete your conversation with ${chat.name}? This cannot be undone.")
+      },
+      confirmButton = {
+        Button(
+          onClick = {
+            viewModel.deleteChat(chat.id)
+            chatToDelete = null
+          },
+          colors = ButtonDefaults.buttonColors(containerColor = ConnectRedError)
+        ) {
+          Text("Delete")
+        }
+      },
+      dismissButton = {
+        TextButton(onClick = { chatToDelete = null }) {
+          Text("Cancel")
+        }
+      }
+    )
+  }
+
+  // Block User Confirmation Dialog
+  userToBlock?.let { target ->
+    AlertDialog(
+      onDismissRequest = { userToBlock = null },
+      title = { Text("Block ${target.name}?", fontWeight = FontWeight.Bold) },
+      text = {
+        Text("${target.name} won't be able to message or call you on CONNECT. This chat will be removed from your inbox.")
+      },
+      confirmButton = {
+        Button(
+          onClick = {
+            viewModel.blockUser(target.id)
+            userToBlock = null
+          },
+          colors = ButtonDefaults.buttonColors(containerColor = ConnectRedError)
+        ) {
+          Text("Block")
+        }
+      },
+      dismissButton = {
+        TextButton(onClick = { userToBlock = null }) {
+          Text("Cancel")
+        }
+      }
+    )
   }
 }
 
@@ -433,28 +617,41 @@ fun StoriesReel(
   }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun ChatItem(
   chat: Chat,
-  onClick: () -> Unit
+  onClick: () -> Unit,
+  onLongClick: () -> Unit,
+  onAvatarClick: () -> Unit
 ) {
   val isOnline = chat.participants.any { it.isOnline }
 
   Row(
     modifier = Modifier
       .fillMaxWidth()
-      .clickable { onClick() }
+      .combinedClickable(
+        onClick = onClick,
+        onLongClick = onLongClick
+      )
       .padding(horizontal = 16.dp, vertical = 12.dp)
       .testTag("chat_item_${chat.id}"),
     verticalAlignment = Alignment.CenterVertically
   ) {
-    ConnectAvatar(
-      avatarUrl = chat.avatarUrl,
-      name = chat.name,
-      size = 52.dp,
-      isOnline = isOnline,
-      showOnlineBadge = chat.type == ChatType.DIRECT
-    )
+    Box(
+      modifier = Modifier
+        .clip(CircleShape)
+        .clickable { onAvatarClick() }
+        .testTag("chat_avatar_profile_${chat.id}")
+    ) {
+      ConnectAvatar(
+        avatarUrl = chat.avatarUrl,
+        name = chat.name,
+        size = 52.dp,
+        isOnline = isOnline,
+        showOnlineBadge = chat.type == ChatType.DIRECT
+      )
+    }
 
     Spacer(modifier = Modifier.width(14.dp))
 
@@ -541,6 +738,20 @@ fun ChatItem(
           }
         }
       }
+    }
+
+    IconButton(
+      onClick = onLongClick,
+      modifier = Modifier
+        .size(48.dp)
+        .testTag("chat_item_more_${chat.id}")
+    ) {
+      Icon(
+        imageVector = Icons.Default.MoreVert,
+        contentDescription = "Chat Options",
+        tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+        modifier = Modifier.size(18.dp)
+      )
     }
   }
 }

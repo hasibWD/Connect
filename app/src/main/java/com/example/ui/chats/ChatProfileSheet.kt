@@ -237,15 +237,17 @@ fun ChatProfileSheet(
             }
           )
 
-          HorizontalDivider(modifier = Modifier.padding(start = 52.dp), color = MaterialTheme.colorScheme.outline.copy(alpha = 0.15f))
+          if (chat.type == ChatType.DIRECT && targetContact != null) {
+            HorizontalDivider(modifier = Modifier.padding(start = 52.dp), color = MaterialTheme.colorScheme.outline.copy(alpha = 0.15f))
 
-          MessengerSettingItem(
-            icon = Icons.Default.Block,
-            title = "Block ${chat.name}",
-            subtitle = "They won't be able to message or call you",
-            titleColor = ConnectRedError,
-            onClick = { showBlockDialog = true }
-          )
+            MessengerSettingItem(
+              icon = Icons.Default.Block,
+              title = "Block ${chat.name}",
+              subtitle = "They won't be able to message or call you",
+              titleColor = ConnectRedError,
+              onClick = { showBlockDialog = true }
+            )
+          }
 
           HorizontalDivider(modifier = Modifier.padding(start = 52.dp), color = MaterialTheme.colorScheme.outline.copy(alpha = 0.15f))
 
