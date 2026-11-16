@@ -208,7 +208,6 @@ fun ProfileScreen(
         Row(
           modifier = Modifier
             .fillMaxWidth()
-            .clickable { viewModel.toggleReadReceipts(!readReceiptsEnabled) }
             .padding(16.dp),
           horizontalArrangement = Arrangement.SpaceBetween,
           verticalAlignment = Alignment.CenterVertically
@@ -227,7 +226,7 @@ fun ProfileScreen(
             Column {
               Text("Read Receipts", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
               Text(
-                if (readReceiptsEnabled) "Double blue checkmarks shown when read" else "Read receipts are disabled",
+                if (readReceiptsEnabled) "Blue double checkmarks shown for outgoing messages" else "Blue double checkmarks hidden for outgoing messages",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
               )

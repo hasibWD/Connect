@@ -99,4 +99,24 @@ interface InsForgeApiService {
     @Query("sender_id") senderNotFilter: String,
     @Body statusUpdate: Map<String, String> = mapOf("status" to "read")
   ): Response<ResponseBody>
+
+  @GET("rest/v1/typing_indicators")
+  suspend fun getTypingIndicators(
+    @Query("chat_id") chatIdFilter: String,
+    @Query("is_typing") isTypingFilter: String = "eq.true",
+    @Query("select") select: String = "*"
+  ): Response<List<InsForgeTypingDto>>
+
+  @POST("rest/v1/typing_indicators")
+  suspend fun upsertTypingIndicator(
+    @Body indicator: InsForgeTypingDto,
+    @Header("Prefer") prefer: String = "resolution=merge-duplicates"
+  ): Response<ResponseBody>
 }
+
+data class InsForgeTypingDto(
+  val chat_id: String = "",
+  val user_id: String = "",
+  val user_name: String = "",
+  val is_typing: Boolean = false
+)

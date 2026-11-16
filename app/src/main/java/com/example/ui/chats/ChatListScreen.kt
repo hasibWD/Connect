@@ -99,6 +99,8 @@ fun ChatListScreen(
   val currentUser by viewModel.currentUser.collectAsState()
   val insForgeConfig by viewModel.insForgeConfig.collectAsState()
   val searchQuery by viewModel.searchQuery.collectAsState()
+  val readReceiptsEnabled by viewModel.readReceiptsEnabled.collectAsState()
+  val typingParticipants by viewModel.typingParticipants.collectAsState()
 
   var isSearching by remember { mutableStateOf(false) }
   var showFabMenu by remember { mutableStateOf(false) }
@@ -255,6 +257,8 @@ fun ChatListScreen(
             ChatItem(
               chat = chat,
               currentUserId = currentUser?.id ?: "user_me",
+              showReadReceipts = readReceiptsEnabled,
+              typingParticipant = typingParticipants[chat.id],
               onClick = { viewModel.openChat(chat.id) },
               onLongClick = { selectedChatForActions = chat },
               onAvatarClick = { selectedChatForProfile = chat }
@@ -625,6 +629,8 @@ fun StoriesReel(
 fun ChatItem(
   chat: Chat,
   currentUserId: String = "user_me",
+  showReadReceipts: Boolean = true,
+  typingParticipant: String? = null,
   onClick: () -> Unit,
   onLongClick: () -> Unit,
   onAvatarClick: () -> Unit
@@ -693,31 +699,48 @@ fun ChatItem(
           modifier = Modifier.weight(1f),
           verticalAlignment = Alignment.CenterVertically
         ) {
-          if (chat.lastMessageSenderId == currentUserId && chat.lastMessageStatus != null) {
-            val (statusIcon, statusTint, statusLabel) = when (chat.lastMessageStatus) {
-              MessageStatus.READ -> Triple(Icons.Default.DoneAll, ConnectBluePrimary, "Read")
-              MessageStatus.DELIVERED -> Triple(Icons.Default.DoneAll, MaterialTheme.colorScheme.onSurfaceVariant, "Delivered")
-              MessageStatus.SENT, MessageStatus.SENDING -> Triple(Icons.Default.Done, MaterialTheme.colorScheme.onSurfaceVariant, "Sent")
-            }
-            Icon(
-              imageVector = statusIcon,
-              contentDescription = statusLabel,
-              tint = statusTint,
-              modifier = Modifier
-                .size(15.dp)
-                .testTag("chat_list_receipt_${chat.id}")
+          if (typingParticipant != null) {
+            Text(
+              text = if (chat.type == ChatType.GROUP) "$typingParticipant is typing..." else "typing...",
+              style = MaterialTheme.typography.bodyMedium,
+              color = ConnectBluePrimary,
+              fontWeight = FontWeight.SemiBold,
+              maxLines = 1,
+              overflow = TextOverflow.Ellipsis,
+              modifier = Modifier.testTag("chat_list_typing_${chat.id}")
             )
-            Spacer(modifier = Modifier.width(4.dp))
-          }
+          } else {
+            if (chat.lastMessageSenderId == currentUserId && chat.lastMessageStatus != null) {
+              val effectiveLastStatus = if (!showReadReceipts && chat.lastMessageStatus == MessageStatus.READ) {
+                MessageStatus.DELIVERED
+              } else {
+                chat.lastMessageStatus
+              }
+              val (statusIcon, statusTint, statusLabel) = when (effectiveLastStatus) {
+                MessageStatus.READ -> Triple(Icons.Default.DoneAll, ConnectBluePrimary, "Read")
+                MessageStatus.DELIVERED -> Triple(Icons.Default.DoneAll, MaterialTheme.colorScheme.onSurfaceVariant, "Delivered")
+                MessageStatus.SENT, MessageStatus.SENDING -> Triple(Icons.Default.Done, MaterialTheme.colorScheme.onSurfaceVariant, "Sent")
+              }
+              Icon(
+                imageVector = statusIcon,
+                contentDescription = statusLabel,
+                tint = statusTint,
+                modifier = Modifier
+                  .size(15.dp)
+                  .testTag("chat_list_receipt_${chat.id}")
+              )
+              Spacer(modifier = Modifier.width(4.dp))
+            }
 
-          Text(
-            text = chat.lastMessage,
-            style = MaterialTheme.typography.bodyMedium,
-            color = if (chat.unreadCount > 0) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant,
-            fontWeight = if (chat.unreadCount > 0) FontWeight.SemiBold else FontWeight.Normal,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis
-          )
+            Text(
+              text = chat.lastMessage,
+              style = MaterialTheme.typography.bodyMedium,
+              color = if (chat.unreadCount > 0) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant,
+              fontWeight = if (chat.unreadCount > 0) FontWeight.SemiBold else FontWeight.Normal,
+              maxLines = 1,
+              overflow = TextOverflow.Ellipsis
+            )
+          }
         }
 
         Row(verticalAlignment = Alignment.CenterVertically) {

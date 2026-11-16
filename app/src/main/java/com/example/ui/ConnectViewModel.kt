@@ -48,6 +48,7 @@ class ConnectViewModel(application: Application) : AndroidViewModel(application)
   val activeCall: StateFlow<ActiveCallState?> = repository.activeCall
   val reports: StateFlow<List<ReportItem>> = repository.reports
   val readReceiptsEnabled: StateFlow<Boolean> = repository.readReceiptsEnabled
+  val typingParticipants: StateFlow<Map<String, String>> = repository.typingParticipants
 
   // UI Navigation & Dialog states
   private val _currentTab = MutableStateFlow(MainTab.CHATS)
@@ -99,6 +100,8 @@ class ConnectViewModel(application: Application) : AndroidViewModel(application)
 
   // Call timer job
   private var callTimerJob: Job? = null
+  private var typingDebounceJob: Job? = null
+  private var typingPollJob: Job? = null
 
   // Auth form states
   private val _authError = MutableStateFlow<String?>(null)
@@ -132,9 +135,22 @@ class ConnectViewModel(application: Application) : AndroidViewModel(application)
         }
       }
     }
+    typingPollJob?.cancel()
+    typingPollJob = viewModelScope.launch {
+      while (_activeChatId.value == chatId) {
+        repository.refreshRemoteTypingStatus(chatId)
+        delay(1500)
+      }
+    }
   }
 
   fun closeChat() {
+    val closingChatId = _activeChatId.value
+    typingDebounceJob?.cancel()
+    typingPollJob?.cancel()
+    if (closingChatId != null) {
+      repository.setLocalUserTyping(closingChatId, false)
+    }
     _activeChatId.value = null
     _replyingTo.value = null
   }
@@ -246,9 +262,27 @@ class ConnectViewModel(application: Application) : AndroidViewModel(application)
   }
 
   // Messaging
+  fun onMessageInputChanged(chatId: String, text: String) {
+    typingDebounceJob?.cancel()
+    val hasText = text.isNotBlank()
+    repository.setLocalUserTyping(chatId, hasText)
+    if (hasText) {
+      typingDebounceJob = viewModelScope.launch {
+        delay(2500)
+        repository.setLocalUserTyping(chatId, false)
+      }
+    }
+  }
+
+  fun setOtherParticipantTyping(chatId: String, isTyping: Boolean, participantName: String? = null) {
+    repository.setOtherParticipantTyping(chatId, isTyping, participantName)
+  }
+
   fun sendMessage(content: String, type: MessageType = MessageType.TEXT, mediaUrl: String? = null, audioDurationSec: Int = 0) {
     val chatId = _activeChatId.value ?: return
     if (content.isBlank() && mediaUrl == null && type == MessageType.TEXT) return
+    typingDebounceJob?.cancel()
+    repository.setLocalUserTyping(chatId, false)
     repository.sendMessage(
       chatId = chatId,
       content = content,

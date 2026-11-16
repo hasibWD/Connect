@@ -63,6 +63,20 @@
     .pulse-animation {
       animation: pulse-ring 2s infinite ease-in-out;
     }
+    @keyframes typing-bounce {
+      0%, 80%, 100% { transform: scale(0.6); opacity: 0.4; }
+      40% { transform: scale(1); opacity: 1; }
+    }
+    .typing-dot {
+      display: inline-block;
+      width: 4px;
+      height: 4px;
+      border-radius: 9999px;
+      background-color: #0066FF;
+      animation: typing-bounce 1.2s infinite ease-in-out;
+    }
+    .typing-dot:nth-child(2) { animation-delay: 0.15s; }
+    .typing-dot:nth-child(3) { animation-delay: 0.3s; }
   </style>
 </head>
 <body class="bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 min-h-screen flex flex-col transition-colors duration-200">
@@ -228,7 +242,7 @@
             <button onclick="triggerSendImage()" class="p-2 text-slate-400 hover:text-connect-blue rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 transition">
               <i data-lucide="image" class="w-5 h-5"></i>
             </button>
-            <input type="text" id="message-input" onkeydown="handleInputKey(event)" placeholder="Type a message..." class="flex-1 bg-slate-100 dark:bg-slate-800 rounded-full px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-connect-blue">
+            <input type="text" id="message-input" oninput="handleTypingInput()" onkeydown="handleInputKey(event)" placeholder="Type a message..." class="flex-1 bg-slate-100 dark:bg-slate-800 rounded-full px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-connect-blue">
             <button onclick="sendVoiceMessage()" title="Voice Message" class="p-2.5 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-connect-blue rounded-full transition">
               <i data-lucide="mic" class="w-5 h-5"></i>
             </button>
@@ -390,7 +404,7 @@
                 <i data-lucide="check-check" class="w-5 h-5 text-connect-blue"></i>
                 <div>
                   <span class="text-sm font-bold block">Read Receipts</span>
-                  <span class="text-xs text-slate-400">Show double blue checkmarks when messages are read</span>
+                  <span id="read-receipts-subtitle" class="text-xs text-slate-400">Blue double checkmarks shown for outgoing messages</span>
                 </div>
               </div>
               <input type="checkbox" id="read-receipts-toggle" checked onchange="toggleReadReceipts(this.checked)" class="w-4 h-4 accent-connect-blue rounded cursor-pointer">
@@ -785,6 +799,8 @@ CREATE POLICY "Public profiles viewable" ON public.profiles FOR SELECT USING (tr
       activeChatId: 'c1',
       showChatProfile: false,
       readReceiptsEnabled: localStorage.getItem('read_receipts_enabled') !== 'false',
+      tabSessionId: 'tab_' + Math.random().toString(36).slice(2),
+      typingByChat: {},
       replyingTo: null,
       callTimer: null,
       callSeconds: 0,
@@ -898,6 +914,7 @@ CREATE POLICY "Public profiles viewable" ON public.profiles FOR SELECT USING (tr
     document.addEventListener('DOMContentLoaded', () => {
       const rrToggle = document.getElementById('read-receipts-toggle');
       if (rrToggle) rrToggle.checked = state.readReceiptsEnabled;
+      updateReadReceiptsSubtitle();
       lucide.createIcons();
       renderChatsList();
       renderActiveChat();
@@ -912,13 +929,44 @@ CREATE POLICY "Public profiles viewable" ON public.profiles FOR SELECT USING (tr
       }
     });
 
+    function updateReadReceiptsSubtitle() {
+      const sub = document.getElementById('read-receipts-subtitle');
+      if (sub) {
+        sub.innerText = state.readReceiptsEnabled
+          ? 'Blue double checkmarks shown for outgoing messages'
+          : 'Blue double checkmarks hidden for outgoing messages';
+      }
+    }
+
     function toggleReadReceipts(enabled) {
       state.readReceiptsEnabled = !!enabled;
       localStorage.setItem('read_receipts_enabled', state.readReceiptsEnabled ? 'true' : 'false');
+      updateReadReceiptsSubtitle();
+      renderChatsList();
+      renderActiveChat();
+
+      if (state.insforgeConfig.url && state.insforgeConfig.key) {
+        fetch(`${state.insforgeConfig.url.replace(/\/$/, '')}/rest/v1/user_settings`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'apikey': state.insforgeConfig.key,
+            'Authorization': `Bearer ${state.insforgeConfig.key}`,
+            'Prefer': 'resolution=merge-duplicates'
+          },
+          body: JSON.stringify({
+            user_id: state.currentUser.id,
+            read_receipts: state.readReceiptsEnabled
+          })
+        }).catch(() => {});
+      }
     }
 
     function renderStatusReceiptIcon(status, forChatList = false) {
-      const effectiveStatus = status || 'sent';
+      let effectiveStatus = status || 'sent';
+      if (!state.readReceiptsEnabled && effectiveStatus === 'read') {
+        effectiveStatus = 'delivered';
+      }
       if (effectiveStatus === 'read') {
         if (forChatList) {
           return '<i data-lucide="check-check" title="Read" class="w-3.5 h-3.5 text-connect-blue flex-shrink-0"></i>';
@@ -950,6 +998,143 @@ CREATE POLICY "Public profiles viewable" ON public.profiles FOR SELECT USING (tr
         renderChatsList();
         if (state.activeChatId === chatId) renderActiveChat();
       }
+    }
+
+    // Real-Time Typing Indicator Engine (Cross-tab BroadcastChannel + localStorage + InsForge)
+    const typingChannel = typeof BroadcastChannel !== 'undefined' ? new BroadcastChannel('connect_typing_channel') : null;
+    const typingExpireTimers = {};
+    let localTypingIdleTimer = null;
+    let lastTypingBroadcastAt = 0;
+
+    if (typingChannel) {
+      typingChannel.onmessage = (event) => {
+        const data = event.data;
+        if (!data || data.type !== 'typing' || data.sessionId === state.tabSessionId) return;
+        applyOtherParticipantTyping(data.chatId, data.isTyping, data.senderName);
+      };
+    }
+
+    window.addEventListener('storage', (event) => {
+      if (event.key !== 'connect_typing_event' || !event.newValue) return;
+      try {
+        const data = JSON.parse(event.newValue);
+        if (data && data.type === 'typing' && data.sessionId !== state.tabSessionId) {
+          applyOtherParticipantTyping(data.chatId, data.isTyping, data.senderName);
+        }
+      } catch (_) {}
+    });
+
+    function renderHeaderStatusMarkup(chat) {
+      const typingEntry = state.typingByChat[chat.id];
+      if (typingEntry && typingEntry.isTyping) {
+        const label = chat.isGroup && typingEntry.senderName ? `${typingEntry.senderName} is typing...` : 'typing...';
+        return `<span id="chat-header-typing-indicator" class="inline-flex items-center space-x-1.5 text-[11px] font-semibold text-connect-blue"><span class="inline-flex items-center space-x-0.5"><span class="typing-dot"></span><span class="typing-dot"></span><span class="typing-dot"></span></span><span>${label}</span></span>`;
+      }
+      return `<span class="text-[11px] ${chat.online ? 'text-connect-online font-semibold' : 'text-slate-400'}">${chat.online ? 'Active now' : 'Offline'}</span>`;
+    }
+
+    function updateTypingIndicatorsInDOM(chatId) {
+      const chat = state.chats.find(c => c.id === chatId);
+      if (!chat) return;
+      if (chatId === state.activeChatId) {
+        const statusEl = document.getElementById('chat-header-status');
+        if (statusEl) {
+          statusEl.innerHTML = renderHeaderStatusMarkup(chat);
+        }
+      }
+      const listPreviewEl = document.getElementById(`chat-list-preview-${chatId}`);
+      if (listPreviewEl) {
+        const typingEntry = state.typingByChat[chatId];
+        if (typingEntry && typingEntry.isTyping) {
+          const label = chat.isGroup && typingEntry.senderName ? `${typingEntry.senderName} is typing...` : 'typing...';
+          listPreviewEl.innerHTML = `<span class="text-xs font-semibold text-connect-blue truncate">${label}</span>`;
+        } else {
+          const lastMessageObj = chat.messages && chat.messages.length ? chat.messages[chat.messages.length - 1] : null;
+          const previewReceipt = lastMessageObj && lastMessageObj.fromMe && !lastMessageObj.deleted
+            ? renderStatusReceiptIcon(lastMessageObj.status, true)
+            : '';
+          listPreviewEl.innerHTML = `${previewReceipt}<p class="text-xs text-slate-500 dark:text-slate-400 truncate">${chat.lastMsg}</p>`;
+          lucide.createIcons();
+        }
+      }
+    }
+
+    function applyOtherParticipantTyping(chatId, isTyping, senderName) {
+      clearTimeout(typingExpireTimers[chatId]);
+      if (!isTyping) {
+        delete state.typingByChat[chatId];
+        updateTypingIndicatorsInDOM(chatId);
+        return;
+      }
+      const chat = state.chats.find(c => c.id === chatId);
+      const resolvedName = senderName || (chat ? (chat.isGroup ? 'Sarah' : chat.name) : 'Someone');
+      state.typingByChat[chatId] = { isTyping: true, senderName: resolvedName };
+      updateTypingIndicatorsInDOM(chatId);
+
+      typingExpireTimers[chatId] = setTimeout(() => {
+        delete state.typingByChat[chatId];
+        updateTypingIndicatorsInDOM(chatId);
+      }, 3200);
+    }
+
+    function broadcastTypingStatus(chatId, isTyping) {
+      if (!chatId) return;
+      const payload = {
+        type: 'typing',
+        chatId: chatId,
+        sessionId: state.tabSessionId,
+        senderName: state.currentUser.name,
+        isTyping: !!isTyping,
+        ts: Date.now()
+      };
+      if (typingChannel) {
+        try { typingChannel.postMessage(payload); } catch (_) {}
+      }
+      try {
+        localStorage.setItem('connect_typing_event', JSON.stringify(payload));
+      } catch (_) {}
+
+      // Sync to InsForge REST if configured
+      if (state.insforgeConfig.url && state.insforgeConfig.key) {
+        fetch(`${state.insforgeConfig.url.replace(/\/$/, '')}/rest/v1/typing_indicators`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'apikey': state.insforgeConfig.key,
+            'Authorization': `Bearer ${state.insforgeConfig.key}`,
+            'Prefer': 'resolution=merge-duplicates'
+          },
+          body: JSON.stringify({
+            chat_id: chatId,
+            user_id: state.currentUser.id,
+            user_name: state.currentUser.name,
+            is_typing: !!isTyping
+          })
+        }).catch(() => {});
+      }
+    }
+
+    function handleTypingInput() {
+      const input = document.getElementById('message-input');
+      const hasText = !!(input && input.value.trim().length > 0);
+      clearTimeout(localTypingIdleTimer);
+
+      if (!hasText) {
+        lastTypingBroadcastAt = 0;
+        broadcastTypingStatus(state.activeChatId, false);
+        return;
+      }
+
+      const now = Date.now();
+      if (now - lastTypingBroadcastAt > 500) {
+        lastTypingBroadcastAt = now;
+        broadcastTypingStatus(state.activeChatId, true);
+      }
+
+      localTypingIdleTimer = setTimeout(() => {
+        lastTypingBroadcastAt = 0;
+        broadcastTypingStatus(state.activeChatId, false);
+      }, 2500);
     }
 
     // Dark Mode Toggle
@@ -1026,9 +1211,10 @@ CREATE POLICY "Public profiles viewable" ON public.profiles FOR SELECT USING (tr
                 <span class="text-[11px] text-slate-400">${chat.time}</span>
               </div>
               <div class="flex justify-between items-center">
-                <div class="flex items-center space-x-1 min-w-0 pr-2">
-                  ${previewReceipt}
-                  <p class="text-xs text-slate-500 dark:text-slate-400 truncate">${chat.lastMsg}</p>
+                <div id="chat-list-preview-${chat.id}" class="flex items-center space-x-1 min-w-0 pr-2">
+                  ${state.typingByChat[chat.id]?.isTyping
+                    ? `<span class="text-xs font-semibold text-connect-blue truncate">${chat.isGroup && state.typingByChat[chat.id]?.senderName ? `${state.typingByChat[chat.id].senderName} is typing...` : 'typing...'}</span>`
+                    : `${previewReceipt}<p class="text-xs text-slate-500 dark:text-slate-400 truncate">${chat.lastMsg}</p>`}
                 </div>
                 ${chat.unread > 0 ? `<span class="bg-connect-blue text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full">${chat.unread}</span>` : ''}
               </div>
@@ -1150,7 +1336,7 @@ CREATE POLICY "Public profiles viewable" ON public.profiles FOR SELECT USING (tr
                   <span>${chat.name}</span>
                   <i data-lucide="chevron-right" class="w-3.5 h-3.5 text-slate-400"></i>
                 </h3>
-                <span class="text-[11px] ${chat.online ? 'text-connect-online font-semibold' : 'text-slate-400'}">${chat.online ? 'Active now' : 'Offline'}</span>
+                <div id="chat-header-status">${renderHeaderStatusMarkup(chat)}</div>
               </div>
             </div>
           </div>
@@ -1580,12 +1766,21 @@ CREATE POLICY "Public profiles viewable" ON public.profiles FOR SELECT USING (tr
       chat.time = timeStr;
 
       input.value = '';
+      clearTimeout(localTypingIdleTimer);
+      lastTypingBroadcastAt = 0;
+      broadcastTypingStatus(chat.id, false);
       renderChatsList();
       renderActiveChat();
       scheduleDeliveryAndRead(chat, msg);
 
+      // Show real-time typing indicator before simulated contact reply
+      setTimeout(() => {
+        applyOtherParticipantTyping(chat.id, true, chat.isGroup ? 'Sarah' : chat.name);
+      }, 850);
+
       // Simulated auto-reply
       setTimeout(() => {
+        applyOtherParticipantTyping(chat.id, false);
         if (state.readReceiptsEnabled) markMessagesAsReadByOther(chat.id);
         chat.messages.push({
           id: 'reply_' + Date.now(),
@@ -1865,6 +2060,7 @@ CREATE POLICY "Public profiles viewable" ON public.profiles FOR SELECT USING (tr
 
     function insertEmoji(emoji) {
       document.getElementById('message-input').value += emoji;
+      handleTypingInput();
     }
 
     function handleLogout() {

@@ -228,5 +228,19 @@ CREATE POLICY "Users can log calls" ON public.calls FOR INSERT WITH CHECK (auth.
 CREATE POLICY "Users can view own notifications" ON public.notifications FOR SELECT USING (auth.uid() = user_id);
 CREATE POLICY "Users can update own notifications" ON public.notifications FOR UPDATE USING (auth.uid() = user_id);
 CREATE POLICY "Users can view and update their settings" ON public.user_settings FOR ALL USING (auth.uid() = user_id);
+
+CREATE TABLE IF NOT EXISTS public.typing_indicators (
+    chat_id UUID NOT NULL REFERENCES public.chats(id) ON DELETE CASCADE,
+    user_id UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
+    user_name TEXT NOT NULL DEFAULT '',
+    is_typing BOOLEAN NOT NULL DEFAULT false,
+    updated_at TIMESTAMPTZ DEFAULT now(),
+    PRIMARY KEY (chat_id, user_id)
+);
+ALTER TABLE public.typing_indicators ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Participants can view typing indicators" ON public.typing_indicators FOR SELECT USING (
+    EXISTS (SELECT 1 FROM public.chat_members WHERE chat_members.chat_id = typing_indicators.chat_id AND chat_members.user_id = auth.uid())
+);
+CREATE POLICY "Users can upsert own typing indicator" ON public.typing_indicators FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
 """
 }

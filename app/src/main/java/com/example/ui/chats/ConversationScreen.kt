@@ -6,6 +6,11 @@ import android.content.Context
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -80,6 +85,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
@@ -126,6 +132,9 @@ fun ConversationScreen(
   val allMessagesMap by viewModel.rawMessages.collectAsState()
   val currentUser by viewModel.currentUser.collectAsState()
   val replyingTo by viewModel.replyingTo.collectAsState()
+  val readReceiptsEnabled by viewModel.readReceiptsEnabled.collectAsState()
+  val typingParticipants by viewModel.typingParticipants.collectAsState()
+  val typingSender = typingParticipants[chatId]
 
   val chat = chats.find { it.id == chatId } ?: run {
     viewModel.closeChat()
@@ -210,17 +219,35 @@ fun ConversationScreen(
               maxLines = 1,
               overflow = TextOverflow.Ellipsis
             )
-            val subtitle = if (chat.type == ChatType.GROUP) {
-              "${chat.participants.size} members"
+            if (typingSender != null) {
+              Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.testTag("chat_header_typing_indicator")
+              ) {
+                TypingDotsIndicator(color = ConnectBluePrimary)
+                Spacer(modifier = Modifier.width(6.dp))
+                Text(
+                  text = if (chat.type == ChatType.GROUP) "$typingSender is typing..." else "typing...",
+                  style = MaterialTheme.typography.labelSmall,
+                  fontWeight = FontWeight.SemiBold,
+                  color = ConnectBluePrimary,
+                  maxLines = 1,
+                  overflow = TextOverflow.Ellipsis
+                )
+              }
             } else {
-              val contact = chat.participants.firstOrNull { it.id != currentUser?.id }
-              if (contact?.isOnline == true) "Online" else contact?.lastSeenText ?: "Offline"
+              val subtitle = if (chat.type == ChatType.GROUP) {
+                "${chat.participants.size} members"
+              } else {
+                val contact = chat.participants.firstOrNull { it.id != currentUser?.id }
+                if (contact?.isOnline == true) "Online" else contact?.lastSeenText ?: "Offline"
+              }
+              Text(
+                text = subtitle,
+                style = MaterialTheme.typography.labelSmall,
+                color = if (subtitle == "Online") ConnectGreenOnline else MaterialTheme.colorScheme.onSurfaceVariant
+              )
             }
-            Text(
-              text = subtitle,
-              style = MaterialTheme.typography.labelSmall,
-              color = if (subtitle == "Online") ConnectGreenOnline else MaterialTheme.colorScheme.onSurfaceVariant
-            )
           }
         }
 
@@ -324,6 +351,7 @@ fun ConversationScreen(
         MessageBubble(
           message = message,
           isMe = isMe,
+          showReadReceipts = readReceiptsEnabled,
           onLongClick = { selectedMessageForAction = message },
           onReplyClick = { viewModel.setReplyingTo(message) }
         )
@@ -413,7 +441,10 @@ fun ConversationScreen(
           // Input Text Field
           OutlinedTextField(
             value = inputText,
-            onValueChange = { inputText = it },
+            onValueChange = {
+              inputText = it
+              viewModel.onMessageInputChanged(chatId, it)
+            },
             placeholder = { Text("Type a message...") },
             maxLines = 4,
             modifier = Modifier
@@ -481,6 +512,7 @@ fun ConversationScreen(
           EmojiDrawer(
             onEmojiSelected = { emoji ->
               inputText += emoji
+              viewModel.onMessageInputChanged(chatId, inputText)
             }
           )
         }
@@ -824,6 +856,7 @@ fun ConversationScreen(
 fun MessageBubble(
   message: Message,
   isMe: Boolean,
+  showReadReceipts: Boolean = true,
   onLongClick: () -> Unit,
   onReplyClick: () -> Unit
 ) {
@@ -983,7 +1016,12 @@ fun MessageBubble(
 
           if (isMe) {
             Spacer(modifier = Modifier.width(4.dp))
-            when (message.status) {
+            val effectiveStatus = if (!showReadReceipts && message.status == MessageStatus.READ) {
+              MessageStatus.DELIVERED
+            } else {
+              message.status
+            }
+            when (effectiveStatus) {
               MessageStatus.READ -> {
                 Box(
                   modifier = Modifier
@@ -1128,6 +1166,47 @@ fun EmojiDrawer(
           }
         }
       }
+    }
+  }
+}
+
+@Composable
+fun TypingDotsIndicator(
+  color: Color,
+  modifier: Modifier = Modifier
+) {
+  val transition = rememberInfiniteTransition(label = "typingDots")
+  val dot1 by transition.animateFloat(
+    initialValue = 0.25f,
+    targetValue = 1f,
+    animationSpec = infiniteRepeatable(tween(450, delayMillis = 0), RepeatMode.Reverse),
+    label = "dot1"
+  )
+  val dot2 by transition.animateFloat(
+    initialValue = 0.25f,
+    targetValue = 1f,
+    animationSpec = infiniteRepeatable(tween(450, delayMillis = 150), RepeatMode.Reverse),
+    label = "dot2"
+  )
+  val dot3 by transition.animateFloat(
+    initialValue = 0.25f,
+    targetValue = 1f,
+    animationSpec = infiniteRepeatable(tween(450, delayMillis = 300), RepeatMode.Reverse),
+    label = "dot3"
+  )
+
+  Row(
+    modifier = modifier,
+    horizontalArrangement = Arrangement.spacedBy(3.dp),
+    verticalAlignment = Alignment.CenterVertically
+  ) {
+    listOf(dot1, dot2, dot3).forEach { alphaValue ->
+      Box(
+        modifier = Modifier
+          .size(5.dp)
+          .alpha(alphaValue)
+          .background(color, CircleShape)
+      )
     }
   }
 }

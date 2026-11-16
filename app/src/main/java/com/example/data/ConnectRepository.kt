@@ -7,6 +7,7 @@ import com.example.data.insforge.InsForgeAuthRequest
 import com.example.data.insforge.InsForgeClient
 import com.example.data.insforge.InsForgeMessageDto
 import com.example.data.insforge.InsForgeProfileDto
+import com.example.data.insforge.InsForgeTypingDto
 import com.example.model.ActiveCallState
 import com.example.model.CallDirection
 import com.example.model.CallItem
@@ -24,6 +25,7 @@ import com.example.model.StoryType
 import com.example.model.User
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -95,9 +97,73 @@ class ConnectRepository(context: Context) {
   private val _readReceiptsEnabled = MutableStateFlow(prefs.getBoolean("read_receipts_enabled", true))
   val readReceiptsEnabled: StateFlow<Boolean> = _readReceiptsEnabled.asStateFlow()
 
+  // Real-time Typing Indicators (chatId -> typing participant display name)
+  private val _typingParticipants = MutableStateFlow<Map<String, String>>(emptyMap())
+  val typingParticipants: StateFlow<Map<String, String>> = _typingParticipants.asStateFlow()
+  private val typingClearJobs = mutableMapOf<String, Job>()
+
   fun setReadReceiptsEnabled(enabled: Boolean) {
     _readReceiptsEnabled.value = enabled
     prefs.edit().putBoolean("read_receipts_enabled", enabled).apply()
+  }
+
+  fun setOtherParticipantTyping(chatId: String, isTyping: Boolean, participantName: String? = null) {
+    typingClearJobs.remove(chatId)?.cancel()
+    if (!isTyping) {
+      if (_typingParticipants.value.containsKey(chatId)) {
+        _typingParticipants.value = _typingParticipants.value.toMutableMap().apply { remove(chatId) }
+      }
+      return
+    }
+    val chat = _chats.value.find { it.id == chatId }
+    val currentUserId = _currentUser.value?.id ?: "user_me"
+    val resolvedName = participantName?.takeIf { it.isNotBlank() }
+      ?: chat?.participants?.firstOrNull { it.id != currentUserId }?.name
+      ?: chat?.name
+      ?: "Someone"
+
+    _typingParticipants.value = _typingParticipants.value.toMutableMap().apply {
+      put(chatId, resolvedName)
+    }
+
+    typingClearJobs[chatId] = coroutineScope.launch {
+      delay(3500)
+      _typingParticipants.value = _typingParticipants.value.toMutableMap().apply { remove(chatId) }
+    }
+  }
+
+  fun setLocalUserTyping(chatId: String, isTyping: Boolean) {
+    val user = _currentUser.value ?: return
+    val service = insForgeClient.getService()
+    if (insForgeClient.getAnonKey().isNotBlank() && service != null) {
+      coroutineScope.launch {
+        try {
+          service.upsertTypingIndicator(
+            InsForgeTypingDto(
+              chat_id = chatId,
+              user_id = user.id,
+              user_name = user.name,
+              is_typing = isTyping
+            )
+          )
+        } catch (_: Exception) {}
+      }
+    }
+  }
+
+  suspend fun refreshRemoteTypingStatus(chatId: String) {
+    val service = insForgeClient.getService() ?: return
+    if (insForgeClient.getAnonKey().isBlank()) return
+    val currentUserId = _currentUser.value?.id ?: "user_me"
+    try {
+      val response = service.getTypingIndicators(chatIdFilter = "eq.$chatId")
+      if (response.isSuccessful) {
+        val otherTyping = response.body()?.firstOrNull { it.user_id != currentUserId && it.is_typing }
+        if (otherTyping != null) {
+          setOtherParticipantTyping(chatId, true, otherTyping.user_name)
+        }
+      }
+    } catch (_: Exception) {}
   }
 
   init {
@@ -441,8 +507,13 @@ class ConnectRepository(context: Context) {
         markMessagesAsReadByOtherParticipant(chatId)
       }
 
-      // Simulate contact reply after a short delay for interactive experience
-      delay(800)
+      // Simulate contact typing indicator and reply for interactive experience
+      val replyContact = targetChat?.participants?.firstOrNull { it.id != user.id }
+      if (replyContact != null) {
+        setOtherParticipantTyping(chatId, true, replyContact.name)
+      }
+      delay(950)
+      setOtherParticipantTyping(chatId, false)
       simulateContactResponse(chatId)
     }
   }
