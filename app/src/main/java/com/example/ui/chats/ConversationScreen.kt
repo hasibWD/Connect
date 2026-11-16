@@ -147,6 +147,10 @@ fun ConversationScreen(
   var showDeleteChatDialog by remember { mutableStateOf(false) }
   var showBlockUserDialog by remember { mutableStateOf(false) }
 
+  LaunchedEffect(chatId) {
+    viewModel.markChatAsRead(chatId)
+  }
+
   // Auto scroll to bottom on new message
   LaunchedEffect(messages.size) {
     if (messages.isNotEmpty()) {
@@ -979,18 +983,54 @@ fun MessageBubble(
 
           if (isMe) {
             Spacer(modifier = Modifier.width(4.dp))
-            val (icon, tint) = when (message.status) {
-              MessageStatus.SENDING -> Pair(Icons.Default.Done, Color.White.copy(alpha = 0.6f))
-              MessageStatus.SENT -> Pair(Icons.Default.Done, Color.White)
-              MessageStatus.DELIVERED -> Pair(Icons.Default.DoneAll, Color.White)
-              MessageStatus.READ -> Pair(Icons.Default.DoneAll, Color(0xFF67E8F9))
+            when (message.status) {
+              MessageStatus.READ -> {
+                Box(
+                  modifier = Modifier
+                    .background(Color.White.copy(alpha = 0.92f), RoundedCornerShape(6.dp))
+                    .padding(horizontal = 4.dp, vertical = 1.dp)
+                    .testTag("read_receipt_${message.id}"),
+                  contentAlignment = Alignment.Center
+                ) {
+                  Icon(
+                    imageVector = Icons.Default.DoneAll,
+                    contentDescription = "Read",
+                    tint = ConnectBluePrimary,
+                    modifier = Modifier.size(13.dp)
+                  )
+                }
+              }
+              MessageStatus.DELIVERED -> {
+                Icon(
+                  imageVector = Icons.Default.DoneAll,
+                  contentDescription = "Delivered",
+                  tint = Color.White,
+                  modifier = Modifier
+                    .size(14.dp)
+                    .testTag("message_status_${message.id}")
+                )
+              }
+              MessageStatus.SENT -> {
+                Icon(
+                  imageVector = Icons.Default.Done,
+                  contentDescription = "Sent",
+                  tint = Color.White.copy(alpha = 0.85f),
+                  modifier = Modifier
+                    .size(14.dp)
+                    .testTag("message_status_${message.id}")
+                )
+              }
+              MessageStatus.SENDING -> {
+                Icon(
+                  imageVector = Icons.Default.Done,
+                  contentDescription = "Sending",
+                  tint = Color.White.copy(alpha = 0.5f),
+                  modifier = Modifier
+                    .size(14.dp)
+                    .testTag("message_status_${message.id}")
+                )
+              }
             }
-            Icon(
-              imageVector = icon,
-              contentDescription = null,
-              tint = tint,
-              modifier = Modifier.size(13.dp)
-            )
           }
         }
       }

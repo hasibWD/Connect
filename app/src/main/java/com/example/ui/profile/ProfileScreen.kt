@@ -23,6 +23,7 @@ import androidx.compose.material.icons.filled.AdminPanelSettings
 import androidx.compose.material.icons.filled.Block
 import androidx.compose.material.icons.filled.Cloud
 import androidx.compose.material.icons.filled.DarkMode
+import androidx.compose.material.icons.filled.DoneAll
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Notifications
@@ -71,6 +72,7 @@ fun ProfileScreen(
 ) {
   val currentUser by viewModel.currentUser.collectAsState()
   val isDarkMode by viewModel.isDarkMode.collectAsState()
+  val readReceiptsEnabled by viewModel.readReceiptsEnabled.collectAsState()
   val insForgeConfig by viewModel.insForgeConfig.collectAsState()
   val chats by viewModel.rawChats.collectAsState()
   val users by viewModel.allUsers.collectAsState()
@@ -191,6 +193,52 @@ fun ProfileScreen(
             checked = user.isOnline,
             onCheckedChange = { viewModel.toggleOnlineStatus(it) },
             colors = SwitchDefaults.colors(checkedThumbColor = ConnectGreenOnline, checkedTrackColor = ConnectGreenOnline.copy(alpha = 0.5f))
+          )
+        }
+      }
+
+      Spacer(modifier = Modifier.height(12.dp))
+
+      // Read Receipts Toggle
+      Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(14.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+      ) {
+        Row(
+          modifier = Modifier
+            .fillMaxWidth()
+            .clickable { viewModel.toggleReadReceipts(!readReceiptsEnabled) }
+            .padding(16.dp),
+          horizontalArrangement = Arrangement.SpaceBetween,
+          verticalAlignment = Alignment.CenterVertically
+        ) {
+          Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.weight(1f)
+          ) {
+            Icon(
+              imageVector = Icons.Default.DoneAll,
+              contentDescription = "Read Receipts",
+              tint = ConnectBluePrimary,
+              modifier = Modifier.size(22.dp)
+            )
+            Spacer(modifier = Modifier.width(12.dp))
+            Column {
+              Text("Read Receipts", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+              Text(
+                if (readReceiptsEnabled) "Double blue checkmarks shown when read" else "Read receipts are disabled",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+              )
+            }
+          }
+          Spacer(modifier = Modifier.width(8.dp))
+          Switch(
+            checked = readReceiptsEnabled,
+            onCheckedChange = { viewModel.toggleReadReceipts(it) },
+            modifier = Modifier.testTag("read_receipts_switch"),
+            colors = SwitchDefaults.colors(checkedThumbColor = ConnectBluePrimary, checkedTrackColor = ConnectBluePrimary.copy(alpha = 0.5f))
           )
         }
       }

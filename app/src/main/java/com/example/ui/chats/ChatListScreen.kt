@@ -26,6 +26,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.automirrored.filled.Chat
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Done
 import androidx.compose.material.icons.filled.DoneAll
 import androidx.compose.material.icons.filled.GroupAdd
 import androidx.compose.material.icons.filled.PushPin
@@ -75,6 +76,7 @@ import androidx.compose.ui.unit.sp
 import com.example.R
 import com.example.model.Chat
 import com.example.model.ChatType
+import com.example.model.MessageStatus
 import com.example.model.Story
 import com.example.model.User
 import com.example.ui.ConnectViewModel
@@ -252,6 +254,7 @@ fun ChatListScreen(
           items(chats, key = { it.id }) { chat ->
             ChatItem(
               chat = chat,
+              currentUserId = currentUser?.id ?: "user_me",
               onClick = { viewModel.openChat(chat.id) },
               onLongClick = { selectedChatForActions = chat },
               onAvatarClick = { selectedChatForProfile = chat }
@@ -621,6 +624,7 @@ fun StoriesReel(
 @Composable
 fun ChatItem(
   chat: Chat,
+  currentUserId: String = "user_me",
   onClick: () -> Unit,
   onLongClick: () -> Unit,
   onAvatarClick: () -> Unit
@@ -689,12 +693,19 @@ fun ChatItem(
           modifier = Modifier.weight(1f),
           verticalAlignment = Alignment.CenterVertically
         ) {
-          if (chat.unreadCount == 0 && chat.type == ChatType.DIRECT) {
+          if (chat.lastMessageSenderId == currentUserId && chat.lastMessageStatus != null) {
+            val (statusIcon, statusTint, statusLabel) = when (chat.lastMessageStatus) {
+              MessageStatus.READ -> Triple(Icons.Default.DoneAll, ConnectBluePrimary, "Read")
+              MessageStatus.DELIVERED -> Triple(Icons.Default.DoneAll, MaterialTheme.colorScheme.onSurfaceVariant, "Delivered")
+              MessageStatus.SENT, MessageStatus.SENDING -> Triple(Icons.Default.Done, MaterialTheme.colorScheme.onSurfaceVariant, "Sent")
+            }
             Icon(
-              imageVector = Icons.Default.DoneAll,
-              contentDescription = "Read",
-              tint = ConnectBluePrimary,
-              modifier = Modifier.size(15.dp)
+              imageVector = statusIcon,
+              contentDescription = statusLabel,
+              tint = statusTint,
+              modifier = Modifier
+                .size(15.dp)
+                .testTag("chat_list_receipt_${chat.id}")
             )
             Spacer(modifier = Modifier.width(4.dp))
           }

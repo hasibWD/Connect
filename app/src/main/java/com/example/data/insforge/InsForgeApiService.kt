@@ -5,6 +5,7 @@ import retrofit2.Response
 import retrofit2.http.Body
 import retrofit2.http.GET
 import retrofit2.http.Header
+import retrofit2.http.PATCH
 import retrofit2.http.POST
 import retrofit2.http.Query
 
@@ -90,5 +91,12 @@ interface InsForgeApiService {
   @POST("rest/v1/messages")
   suspend fun sendMessage(
     @Body message: InsForgeMessageDto
+  ): Response<ResponseBody>
+
+  @PATCH("rest/v1/messages")
+  suspend fun markMessagesAsRead(
+    @Query("chat_id") chatIdFilter: String,
+    @Query("sender_id") senderNotFilter: String,
+    @Body statusUpdate: Map<String, String> = mapOf("status" to "read")
   ): Response<ResponseBody>
 }

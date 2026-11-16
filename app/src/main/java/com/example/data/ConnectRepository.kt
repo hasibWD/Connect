@@ -91,6 +91,15 @@ class ConnectRepository(context: Context) {
   private val _reports = MutableStateFlow<List<ReportItem>>(emptyList())
   val reports: StateFlow<List<ReportItem>> = _reports.asStateFlow()
 
+  // Privacy / Read Receipts Setting
+  private val _readReceiptsEnabled = MutableStateFlow(prefs.getBoolean("read_receipts_enabled", true))
+  val readReceiptsEnabled: StateFlow<Boolean> = _readReceiptsEnabled.asStateFlow()
+
+  fun setReadReceiptsEnabled(enabled: Boolean) {
+    _readReceiptsEnabled.value = enabled
+    prefs.edit().putBoolean("read_receipts_enabled", enabled).apply()
+  }
+
   init {
     initializeSeedData()
     restoreSession()
@@ -392,7 +401,12 @@ class ConnectRepository(context: Context) {
     }
     _chats.value = _chats.value.map { chat ->
       if (chat.id == chatId) {
-        chat.copy(lastMessage = displayPreview, lastMessageTime = timeStr)
+        chat.copy(
+          lastMessage = displayPreview,
+          lastMessageTime = timeStr,
+          lastMessageStatus = MessageStatus.SENT,
+          lastMessageSenderId = user.id
+        )
       } else chat
     }
 
@@ -415,9 +429,37 @@ class ConnectRepository(context: Context) {
         } catch (_: Exception) {}
       }
 
+      // Transition SENT -> DELIVERED
+      delay(600)
+      updateMessageStatus(chatId, newMsg.id, MessageStatus.DELIVERED)
+
+      // Transition DELIVERED -> READ when the other participant views the conversation
+      delay(900)
+      val targetChat = _chats.value.find { it.id == chatId }
+      val isOtherParticipantOnline = targetChat?.participants?.any { it.id != user.id && it.isOnline } == true
+      if (isOtherParticipantOnline && _readReceiptsEnabled.value) {
+        markMessagesAsReadByOtherParticipant(chatId)
+      }
+
       // Simulate contact reply after a short delay for interactive experience
-      delay(2000)
+      delay(800)
       simulateContactResponse(chatId)
+    }
+  }
+
+  private fun updateMessageStatus(chatId: String, messageId: String, newStatus: MessageStatus) {
+    val list = _messages.value[chatId] ?: return
+    val updatedList = list.map { msg ->
+      if (msg.id == messageId && msg.status != MessageStatus.READ) msg.copy(status = newStatus) else msg
+    }
+    _messages.value = _messages.value.toMutableMap().apply {
+      put(chatId, updatedList)
+    }
+    val lastMsg = updatedList.lastOrNull()
+    if (lastMsg != null && lastMsg.id == messageId) {
+      _chats.value = _chats.value.map { chat ->
+        if (chat.id == chatId) chat.copy(lastMessageStatus = lastMsg.status, lastMessageSenderId = lastMsg.senderId) else chat
+      }
     }
   }
 
@@ -425,6 +467,11 @@ class ConnectRepository(context: Context) {
     val chat = _chats.value.find { it.id == chatId } ?: return
     val contact = chat.participants.firstOrNull { it.id != _currentUser.value?.id } ?: return
     val timeStr = SimpleDateFormat("h:mm a", Locale.getDefault()).format(Date())
+
+    // Replying implies the other participant viewed the conversation
+    if (_readReceiptsEnabled.value) {
+      markMessagesAsReadByOtherParticipant(chatId)
+    }
 
     val responses = listOf(
       "That's fantastic! Looking forward to it 😊",
@@ -451,7 +498,13 @@ class ConnectRepository(context: Context) {
     }
     _chats.value = _chats.value.map { c ->
       if (c.id == chatId) {
-        c.copy(lastMessage = replyText, lastMessageTime = timeStr, unreadCount = 0)
+        c.copy(
+          lastMessage = replyText,
+          lastMessageTime = timeStr,
+          unreadCount = 0,
+          lastMessageStatus = MessageStatus.READ,
+          lastMessageSenderId = contact.id
+        )
       } else c
     }
   }
@@ -600,6 +653,73 @@ class ConnectRepository(context: Context) {
   fun markChatAsRead(chatId: String) {
     _chats.value = _chats.value.map { chat ->
       if (chat.id == chatId) chat.copy(unreadCount = 0) else chat
+    }
+
+    val currentUserId = _currentUser.value?.id ?: "user_me"
+    if (_readReceiptsEnabled.value) {
+      val list = _messages.value[chatId]
+      if (list != null) {
+        val updated = list.map { msg ->
+          if (msg.senderId != currentUserId && msg.status != MessageStatus.READ) {
+            msg.copy(status = MessageStatus.READ)
+          } else msg
+        }
+        _messages.value = _messages.value.toMutableMap().apply {
+          put(chatId, updated)
+        }
+      }
+
+      coroutineScope.launch {
+        val service = insForgeClient.getService()
+        if (insForgeClient.getAnonKey().isNotBlank() && service != null) {
+          try {
+            service.markMessagesAsRead(
+              chatIdFilter = "eq.$chatId",
+              senderNotFilter = "neq.$currentUserId"
+            )
+          } catch (_: Exception) {}
+        }
+      }
+    }
+  }
+
+  /**
+   * Called when the other participant views the conversation.
+   * Updates all sent/delivered messages from the current user to READ (double blue checkmarks).
+   */
+  fun markMessagesAsReadByOtherParticipant(chatId: String) {
+    if (!_readReceiptsEnabled.value) return
+    val currentUserId = _currentUser.value?.id ?: "user_me"
+    val list = _messages.value[chatId] ?: return
+    var anyUpdated = false
+    val updatedList = list.map { msg ->
+      if (msg.senderId == currentUserId && msg.status != MessageStatus.READ) {
+        anyUpdated = true
+        msg.copy(status = MessageStatus.READ)
+      } else msg
+    }
+    if (!anyUpdated) return
+
+    _messages.value = _messages.value.toMutableMap().apply {
+      put(chatId, updatedList)
+    }
+    val lastMsg = updatedList.lastOrNull()
+    _chats.value = _chats.value.map { chat ->
+      if (chat.id == chatId && lastMsg != null && lastMsg.senderId == currentUserId) {
+        chat.copy(lastMessageStatus = MessageStatus.READ, lastMessageSenderId = lastMsg.senderId)
+      } else chat
+    }
+
+    coroutineScope.launch {
+      val service = insForgeClient.getService()
+      if (insForgeClient.getAnonKey().isNotBlank() && service != null) {
+        try {
+          service.markMessagesAsRead(
+            chatIdFilter = "eq.$chatId",
+            senderNotFilter = "eq.$currentUserId"
+          )
+        } catch (_: Exception) {}
+      }
     }
   }
 
@@ -820,7 +940,9 @@ class ConnectRepository(context: Context) {
       lastMessageTime = "10:42 AM",
       unreadCount = 2,
       isPinned = true,
-      participants = listOf(u1)
+      participants = listOf(u1),
+      lastMessageStatus = MessageStatus.DELIVERED,
+      lastMessageSenderId = u1.id
     )
     val c2 = Chat(
       id = "chat_team",
@@ -832,17 +954,21 @@ class ConnectRepository(context: Context) {
       unreadCount = 0,
       isPinned = true,
       participants = listOf(u1, u2, u3, u4),
-      groupDescription = "Official collaboration space for CONNECT development."
+      groupDescription = "Official collaboration space for CONNECT development.",
+      lastMessageStatus = MessageStatus.READ,
+      lastMessageSenderId = u2.id
     )
     val c3 = Chat(
       id = "chat_david",
       type = ChatType.DIRECT,
       name = u2.name,
       avatarUrl = u2.avatarUrl,
-      lastMessage = "Are you available for a quick voice call?",
+      lastMessage = "Sure, let's hop on a call in 5 mins!",
       lastMessageTime = "Yesterday",
       unreadCount = 0,
-      participants = listOf(u2)
+      participants = listOf(u2),
+      lastMessageStatus = MessageStatus.DELIVERED,
+      lastMessageSenderId = "user_me"
     )
     val c4 = Chat(
       id = "chat_elena",
@@ -852,7 +978,9 @@ class ConnectRepository(context: Context) {
       lastMessage = "Sent an illustration file for review 🎨",
       lastMessageTime = "Monday",
       unreadCount = 0,
-      participants = listOf(u3)
+      participants = listOf(u3),
+      lastMessageStatus = MessageStatus.READ,
+      lastMessageSenderId = u3.id
     )
 
     _chats.value = listOf(c1, c2, c3, c4)
@@ -929,9 +1057,47 @@ class ConnectRepository(context: Context) {
       )
     )
 
+    val mDavid = listOf(
+      Message(
+        id = "md1",
+        chatId = c3.id,
+        senderId = u2.id,
+        senderName = u2.name,
+        senderAvatar = u2.avatarUrl,
+        content = "Are you available for a quick voice call?",
+        timeString = "Yesterday",
+        status = MessageStatus.READ
+      ),
+      Message(
+        id = "md2",
+        chatId = c3.id,
+        senderId = "user_me",
+        senderName = "Me",
+        senderAvatar = "",
+        content = "Sure, let's hop on a call in 5 mins!",
+        timeString = "Yesterday",
+        status = MessageStatus.DELIVERED
+      )
+    )
+
+    val mElena = listOf(
+      Message(
+        id = "me1",
+        chatId = c4.id,
+        senderId = u3.id,
+        senderName = u3.name,
+        senderAvatar = u3.avatarUrl,
+        content = "Sent an illustration file for review 🎨",
+        timeString = "Monday",
+        status = MessageStatus.READ
+      )
+    )
+
     _messages.value = mapOf(
       c1.id to mSarah,
-      c2.id to mTeam
+      c2.id to mTeam,
+      c3.id to mDavid,
+      c4.id to mElena
     )
 
     // Stories

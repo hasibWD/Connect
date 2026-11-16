@@ -385,6 +385,17 @@
               <input type="checkbox" checked class="w-4 h-4 accent-connect-blue rounded cursor-pointer">
             </div>
 
+            <div class="p-4 flex items-center justify-between">
+              <div class="flex items-center space-x-3">
+                <i data-lucide="check-check" class="w-5 h-5 text-connect-blue"></i>
+                <div>
+                  <span class="text-sm font-bold block">Read Receipts</span>
+                  <span class="text-xs text-slate-400">Show double blue checkmarks when messages are read</span>
+                </div>
+              </div>
+              <input type="checkbox" id="read-receipts-toggle" checked onchange="toggleReadReceipts(this.checked)" class="w-4 h-4 accent-connect-blue rounded cursor-pointer">
+            </div>
+
             <div onclick="openBlockedUsersModal()" class="p-4 flex items-center justify-between cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800/40 transition">
               <div class="flex items-center space-x-3">
                 <i data-lucide="shield-ban" class="w-5 h-5 text-red-500"></i>
@@ -773,6 +784,7 @@ CREATE POLICY "Public profiles viewable" ON public.profiles FOR SELECT USING (tr
       currentTab: 'chats',
       activeChatId: 'c1',
       showChatProfile: false,
+      readReceiptsEnabled: localStorage.getItem('read_receipts_enabled') !== 'false',
       replyingTo: null,
       callTimer: null,
       callSeconds: 0,
@@ -799,9 +811,9 @@ CREATE POLICY "Public profiles viewable" ON public.profiles FOR SELECT USING (tr
           unread: 2,
           isGroup: false,
           messages: [
-            { id: 'm1', fromMe: false, text: "Hey Alex! Did you check the new InsForge database connection?", time: '10:38 AM' },
-            { id: 'm2', fromMe: true, text: "Yes! Real-time messaging and PostgREST endpoints are synchronized.", time: '10:40 AM' },
-            { id: 'm3', fromMe: false, text: "Let's review the new CONNECT UI updates!", time: '10:42 AM' }
+            { id: 'm1', fromMe: false, text: "Hey Alex! Did you check the new InsForge database connection?", time: '10:38 AM', status: 'read' },
+            { id: 'm2', fromMe: true, text: "Yes! Real-time messaging and PostgREST endpoints are synchronized.", time: '10:40 AM', status: 'read' },
+            { id: 'm3', fromMe: false, text: "Let's review the new CONNECT UI updates!", time: '10:42 AM', status: 'delivered' }
           ]
         },
         {
@@ -814,9 +826,9 @@ CREATE POLICY "Public profiles viewable" ON public.profiles FOR SELECT USING (tr
           unread: 0,
           isGroup: true,
           messages: [
-            { id: 'mt1', fromMe: false, sender: 'Sarah', text: "Welcome to CONNECT platform development!", time: '10:15 AM' },
-            { id: 'mt2', fromMe: false, sender: 'Marcus', text: "Voice notes and WebRTC call coordinators are live 🎤", time: '10:22 AM' },
-            { id: 'mt3', fromMe: false, sender: 'David', text: "David: InsForge integration test passed on Android & Web!", time: '10:30 AM' }
+            { id: 'mt1', fromMe: false, sender: 'Sarah', text: "Welcome to CONNECT platform development!", time: '10:15 AM', status: 'read' },
+            { id: 'mt2', fromMe: false, sender: 'Marcus', text: "Voice notes and WebRTC call coordinators are live 🎤", time: '10:22 AM', status: 'read' },
+            { id: 'mt3', fromMe: false, sender: 'David', text: "David: InsForge integration test passed on Android & Web!", time: '10:30 AM', status: 'read' }
           ]
         },
         {
@@ -825,12 +837,13 @@ CREATE POLICY "Public profiles viewable" ON public.profiles FOR SELECT USING (tr
           username: 'david_dev',
           avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150',
           online: true,
-          lastMsg: 'Are you available for a quick voice call?',
+          lastMsg: 'Sure, let us hop on a call in 5 minutes!',
           time: 'Yesterday',
           unread: 0,
           isGroup: false,
           messages: [
-            { id: 'md1', fromMe: false, text: "Hey Alex, are you available for a quick voice call?", time: 'Yesterday' }
+            { id: 'md1', fromMe: false, text: "Hey Alex, are you available for a quick voice call?", time: 'Yesterday', status: 'read' },
+            { id: 'md2', fromMe: true, text: "Sure, let us hop on a call in 5 minutes!", time: 'Yesterday', status: 'delivered' }
           ]
         },
         {
@@ -844,7 +857,7 @@ CREATE POLICY "Public profiles viewable" ON public.profiles FOR SELECT USING (tr
           unread: 0,
           isGroup: false,
           messages: [
-            { id: 'me1', fromMe: false, text: "Sent an illustration file for review 🎨", time: 'Monday' }
+            { id: 'me1', fromMe: false, text: "Sent an illustration file for review 🎨", time: 'Monday', status: 'read' }
           ]
         }
       ],
@@ -883,6 +896,8 @@ CREATE POLICY "Public profiles viewable" ON public.profiles FOR SELECT USING (tr
 
     // Initialize App
     document.addEventListener('DOMContentLoaded', () => {
+      const rrToggle = document.getElementById('read-receipts-toggle');
+      if (rrToggle) rrToggle.checked = state.readReceiptsEnabled;
       lucide.createIcons();
       renderChatsList();
       renderActiveChat();
@@ -896,6 +911,46 @@ CREATE POLICY "Public profiles viewable" ON public.profiles FOR SELECT USING (tr
         navigator.serviceWorker.register('/sw.js').catch(err => console.log('SW reg error:', err));
       }
     });
+
+    function toggleReadReceipts(enabled) {
+      state.readReceiptsEnabled = !!enabled;
+      localStorage.setItem('read_receipts_enabled', state.readReceiptsEnabled ? 'true' : 'false');
+    }
+
+    function renderStatusReceiptIcon(status, forChatList = false) {
+      const effectiveStatus = status || 'sent';
+      if (effectiveStatus === 'read') {
+        if (forChatList) {
+          return '<i data-lucide="check-check" title="Read" class="w-3.5 h-3.5 text-connect-blue flex-shrink-0"></i>';
+        }
+        return '<span title="Read" class="inline-flex items-center bg-white/95 text-connect-blue rounded px-1 py-0.5 shadow-xs"><i data-lucide="check-check" class="w-3 h-3"></i></span>';
+      }
+      if (effectiveStatus === 'delivered') {
+        return forChatList
+          ? '<i data-lucide="check-check" title="Delivered" class="w-3.5 h-3.5 text-slate-400 flex-shrink-0"></i>'
+          : '<i data-lucide="check-check" title="Delivered" class="w-3.5 h-3.5 text-white/90"></i>';
+      }
+      return forChatList
+        ? '<i data-lucide="check" title="Sent" class="w-3.5 h-3.5 text-slate-400 flex-shrink-0"></i>'
+        : '<i data-lucide="check" title="Sent" class="w-3.5 h-3.5 text-white/80"></i>';
+    }
+
+    function markMessagesAsReadByOther(chatId) {
+      if (!state.readReceiptsEnabled) return;
+      const chat = state.chats.find(c => c.id === chatId);
+      if (!chat) return;
+      let changed = false;
+      chat.messages.forEach(m => {
+        if (m.fromMe && m.status !== 'read') {
+          m.status = 'read';
+          changed = true;
+        }
+      });
+      if (changed) {
+        renderChatsList();
+        if (state.activeChatId === chatId) renderActiveChat();
+      }
+    }
 
     // Dark Mode Toggle
     function toggleDarkMode() {
@@ -954,7 +1009,12 @@ CREATE POLICY "Public profiles viewable" ON public.profiles FOR SELECT USING (tr
           </div>
         `;
       } else {
-        container.innerHTML = filtered.map(chat => `
+        container.innerHTML = filtered.map(chat => {
+          const lastMessageObj = chat.messages && chat.messages.length ? chat.messages[chat.messages.length - 1] : null;
+          const previewReceipt = lastMessageObj && lastMessageObj.fromMe && !lastMessageObj.deleted
+            ? renderStatusReceiptIcon(lastMessageObj.status, true)
+            : '';
+          return `
           <div onclick="selectChat('${chat.id}')" class="group p-3.5 flex items-center space-x-3 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800/60 transition ${state.activeChatId === chat.id ? 'bg-connect-light/40 dark:bg-blue-950/30' : ''}">
             <div onclick="event.stopPropagation(); openProfileForChat('${chat.id}')" title="View Profile" class="relative flex-shrink-0 cursor-pointer hover:scale-105 transition">
               <img src="${chat.avatar}" alt="${chat.name}" class="w-12 h-12 rounded-full object-cover">
@@ -966,7 +1026,10 @@ CREATE POLICY "Public profiles viewable" ON public.profiles FOR SELECT USING (tr
                 <span class="text-[11px] text-slate-400">${chat.time}</span>
               </div>
               <div class="flex justify-between items-center">
-                <p class="text-xs text-slate-500 dark:text-slate-400 truncate pr-2">${chat.lastMsg}</p>
+                <div class="flex items-center space-x-1 min-w-0 pr-2">
+                  ${previewReceipt}
+                  <p class="text-xs text-slate-500 dark:text-slate-400 truncate">${chat.lastMsg}</p>
+                </div>
                 ${chat.unread > 0 ? `<span class="bg-connect-blue text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full">${chat.unread}</span>` : ''}
               </div>
             </div>
@@ -974,7 +1037,8 @@ CREATE POLICY "Public profiles viewable" ON public.profiles FOR SELECT USING (tr
               <i data-lucide="more-horizontal" class="w-4 h-4"></i>
             </button>
           </div>
-        `).join('');
+        `;
+        }).join('');
       }
 
       // Update sidebar unread badge
@@ -1013,10 +1077,23 @@ CREATE POLICY "Public profiles viewable" ON public.profiles FOR SELECT USING (tr
     function selectChat(chatId) {
       state.activeChatId = chatId;
       const chat = state.chats.find(c => c.id === chatId);
-      if (chat) chat.unread = 0;
+      if (chat) {
+        chat.unread = 0;
+        if (state.readReceiptsEnabled) {
+          chat.messages.forEach(m => {
+            if (!m.fromMe && m.status !== 'read') m.status = 'read';
+          });
+        }
+      }
       renderChatsList();
       renderActiveChat();
       if (state.showChatProfile) renderChatProfileDrawer();
+
+      if (chat && chat.online && state.readReceiptsEnabled) {
+        setTimeout(() => {
+          if (state.activeChatId === chatId) markMessagesAsReadByOther(chatId);
+        }, 1000);
+      }
 
       // On mobile show chat pane
       const chatPane = document.getElementById('chat-conversation-pane');
@@ -1109,7 +1186,7 @@ CREATE POLICY "Public profiles viewable" ON public.profiles FOR SELECT USING (tr
                   ` : `<p class="text-sm leading-relaxed">${m.text}</p>`}
                   <div class="flex items-center justify-end space-x-1 mt-1 text-[10px] ${m.deleted ? 'text-slate-400' : m.fromMe ? 'text-white/80' : 'text-slate-400'}">
                     <span>${m.time}</span>
-                    ${m.fromMe && !m.deleted ? '<i data-lucide="check-check" class="w-3.5 h-3.5 text-cyan-200"></i>' : ''}
+                    ${m.fromMe && !m.deleted ? renderStatusReceiptIcon(m.status, false) : ''}
                   </div>
                 </div>
                 ${!m.deleted ? `
@@ -1466,6 +1543,22 @@ CREATE POLICY "Public profiles viewable" ON public.profiles FOR SELECT USING (tr
       if (e.key === 'Enter') sendMessage();
     }
 
+    function scheduleDeliveryAndRead(chat, msg) {
+      setTimeout(() => {
+        if (msg.status === 'sent') {
+          msg.status = 'delivered';
+          renderChatsList();
+          if (state.activeChatId === chat.id) renderActiveChat();
+        }
+      }, 600);
+
+      setTimeout(() => {
+        if (chat.online && state.readReceiptsEnabled) {
+          markMessagesAsReadByOther(chat.id);
+        }
+      }, 1300);
+    }
+
     function sendMessage() {
       const input = document.getElementById('message-input');
       const text = input.value.trim();
@@ -1475,31 +1568,36 @@ CREATE POLICY "Public profiles viewable" ON public.profiles FOR SELECT USING (tr
       if (!chat) return;
 
       const timeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-      chat.messages.push({
+      const msg = {
         id: 'msg_' + Date.now(),
         fromMe: true,
         text: text,
-        time: timeStr
-      });
+        time: timeStr,
+        status: 'sent'
+      };
+      chat.messages.push(msg);
       chat.lastMsg = text;
       chat.time = timeStr;
 
       input.value = '';
       renderChatsList();
       renderActiveChat();
+      scheduleDeliveryAndRead(chat, msg);
 
       // Simulated auto-reply
       setTimeout(() => {
+        if (state.readReceiptsEnabled) markMessagesAsReadByOther(chat.id);
         chat.messages.push({
           id: 'reply_' + Date.now(),
           fromMe: false,
           text: "Awesome! Thanks for reaching out via CONNECT! 😊",
-          time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+          time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          status: 'read'
         });
         chat.lastMsg = "Awesome! Thanks for reaching out via CONNECT! 😊";
         renderChatsList();
         renderActiveChat();
-      }, 1500);
+      }, 2100);
     }
 
     function sendVoiceMessage() {
@@ -1507,30 +1605,36 @@ CREATE POLICY "Public profiles viewable" ON public.profiles FOR SELECT USING (tr
       if (!chat) return;
 
       const timeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-      chat.messages.push({
+      const msg = {
         id: 'voice_' + Date.now(),
         fromMe: true,
         isVoice: true,
         text: 'Voice note (0:14)',
-        time: timeStr
-      });
+        time: timeStr,
+        status: 'sent'
+      };
+      chat.messages.push(msg);
       chat.lastMsg = '🎤 Voice message (0:14)';
       renderChatsList();
       renderActiveChat();
+      scheduleDeliveryAndRead(chat, msg);
     }
 
     function triggerSendImage() {
       const chat = state.chats.find(c => c.id === state.activeChatId);
       if (!chat) return;
-      chat.messages.push({
+      const msg = {
         id: 'img_' + Date.now(),
         fromMe: true,
         text: '📷 Photo shared: Project preview',
-        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-      });
+        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        status: 'sent'
+      };
+      chat.messages.push(msg);
       chat.lastMsg = '📷 Photo shared';
       renderChatsList();
       renderActiveChat();
+      scheduleDeliveryAndRead(chat, msg);
     }
 
     // Call Feature

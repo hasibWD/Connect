@@ -86,7 +86,9 @@ data class Chat(
   val isPinned: Boolean = false,
   val participants: List<User> = emptyList(),
   val groupDescription: String = "",
-  val adminId: String = ""
+  val adminId: String = "",
+  val lastMessageStatus: MessageStatus? = null,
+  val lastMessageSenderId: String? = null
 )
 
 data class Story(

@@ -47,6 +47,7 @@ class ConnectViewModel(application: Application) : AndroidViewModel(application)
   val callHistory: StateFlow<List<CallItem>> = repository.callHistory
   val activeCall: StateFlow<ActiveCallState?> = repository.activeCall
   val reports: StateFlow<List<ReportItem>> = repository.reports
+  val readReceiptsEnabled: StateFlow<Boolean> = repository.readReceiptsEnabled
 
   // UI Navigation & Dialog states
   private val _currentTab = MutableStateFlow(MainTab.CHATS)
@@ -121,6 +122,16 @@ class ConnectViewModel(application: Application) : AndroidViewModel(application)
   fun openChat(chatId: String) {
     _activeChatId.value = chatId
     repository.markChatAsRead(chatId)
+    val chat = rawChats.value.find { it.id == chatId }
+    val otherOnline = chat?.participants?.any { it.id != currentUser.value?.id && it.isOnline } == true
+    if (otherOnline) {
+      viewModelScope.launch {
+        delay(1000)
+        if (_activeChatId.value == chatId) {
+          repository.markMessagesAsReadByOtherParticipant(chatId)
+        }
+      }
+    }
   }
 
   fun closeChat() {
@@ -352,6 +363,14 @@ class ConnectViewModel(application: Application) : AndroidViewModel(application)
 
   fun markChatAsRead(chatId: String) {
     repository.markChatAsRead(chatId)
+  }
+
+  fun markConversationViewedByOther(chatId: String) {
+    repository.markMessagesAsReadByOtherParticipant(chatId)
+  }
+
+  fun toggleReadReceipts(enabled: Boolean) {
+    repository.setReadReceiptsEnabled(enabled)
   }
 
   fun startDirectChat(userId: String) {
